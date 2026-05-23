@@ -1,11 +1,13 @@
 openapi: 3.0.3
 info:
-  title: AlojamientoMR - Contrato de Integración de API Gateway para Booking
+  title: AlojamientoMR - Contrato de Integración para Booking (V2 Compatible)
   description: |
     API pública unificada expuesta a través de YARP API Gateway para la integración con Booking.
-    Todas las solicitudes se enrutan a través del Gateway central, aplicando mapeos de rutas específicos y redirigiéndolas al microservicio correspondiente.
-    Esta especificación detalla las operaciones disponibles de Alojamientos, Calendario y Reservas (Booking) con los prefijos de ruta oficiales.
-  version: 1.0.0
+    
+    **ACTUALIZACIÓN CRÍTICA PARA EL EQUIPO FRONTEND:** 
+    1. Hemos reactivado tus rutas antiguas (`/api/alojamientos`, `/api/reservas`) para que no tengas que cambiar tus URLs base.
+    2. **El formato de respuesta JSON ha cambiado:** Ya NO devolvemos el objeto envuelto (`{"success": true, "data": []}`). Ahora recibirás el JSON limpio directamente (`[]` o `{}`).
+  version: 1.1.0
 
 servers:
   - url: https://apigateway-mr.onrender.com
@@ -14,17 +16,61 @@ servers:
     description: Gateway en Desarrollo Local
 
 tags:
+  - name: Rutas Legacy (Compatibilidad)
+    description: Rutas antiguas mantenidas para no romper el frontend. ¡Úsalas con confianza!
   - name: Alojamientos
-    description: Operaciones de catálogo de alojamientos (redirigido a Alojamientos.API)
+    description: Operaciones de catálogo de alojamientos (Nuevas Rutas)
   - name: Calendario
-    description: Consulta y gestión de disponibilidad de habitaciones (redirigido a Alojamientos.API)
+    description: Consulta de disponibilidad (Nuevas Rutas)
   - name: Reservas (Booking)
-    description: Creación, consulta y gestión de reservas de habitaciones (redirigido a Reservas.API)
+    description: Creación y gestión de reservas (Nuevas Rutas)
 
 paths:
 
   # ════════════════════════════════════════
-  # MÓDULO 1: ALOJAMIENTOS (alojamientos-route)
+  # MÓDULO 0: RUTAS ANTIGUAS (LEGACY SUPPORT)
+  # ════════════════════════════════════════
+
+  /api/alojamientos:
+    get:
+      tags: [Rutas Legacy (Compatibilidad)]
+      summary: Obtener alojamientos (Ruta Antigua)
+      description: |
+        **Atención:** La respuesta es ahora un arreglo directo `[]`, sin la propiedad `data`.
+      operationId: GetAllAlojamientosLegacy
+      responses:
+        '200':
+          description: Lista de alojamientos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlojamientoResponse'
+
+  /api/reservas:
+    post:
+      tags: [Rutas Legacy (Compatibilidad)]
+      summary: Crear reserva (Ruta Antigua)
+      description: |
+        **Atención:** La respuesta ya no está envuelta en `data`. El body a enviar debe coincidir con `CrearReservaRequest`.
+      operationId: CrearReservaLegacy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearReservaRequest'
+      responses:
+        '201':
+          description: Reserva creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaResponse'
+
+  # ════════════════════════════════════════
+  # MÓDULO 1: ALOJAMIENTOS (Nuevas Rutas Oficiales)
   # ════════════════════════════════════════
 
   /api/v1/mathias-rivera/alojamientos:
