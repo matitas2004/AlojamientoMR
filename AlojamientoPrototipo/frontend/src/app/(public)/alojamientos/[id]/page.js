@@ -47,7 +47,7 @@ export default function PropiedadDetallePage({ params }) {
         setForm(prev => ({ ...prev, habitacionIds: [habArray[0].habitacionId] }));
       }
     } catch {
-      toast.warn('El servidor está despertando, cargando modo demostración...');
+      toast('El servidor está despertando, cargando modo demostración...', { icon: '⏳' });
       // MOCK DATA FALLBACK
       const mockProp = {
         alojamientoId: parseInt(id),
