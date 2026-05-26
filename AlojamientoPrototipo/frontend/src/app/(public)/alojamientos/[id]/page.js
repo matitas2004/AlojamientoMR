@@ -47,8 +47,25 @@ export default function PropiedadDetallePage({ params }) {
         setForm(prev => ({ ...prev, habitacionIds: [habArray[0].habitacionId] }));
       }
     } catch {
-      toast.error('Error al cargar la propiedad');
-      router.push('/alojamientos');
+      toast.warn('El servidor está despertando, cargando modo demostración...');
+      // MOCK DATA FALLBACK
+      const mockProp = {
+        alojamientoId: parseInt(id),
+        nombre: 'Alojamiento de Demostración',
+        ciudad: 'Quito',
+        descripcion: 'Este es un alojamiento de demostración porque el servidor se está despertando. Por favor, recarga la página en 1 minuto.',
+        tienePiscina: true,
+        tieneParqueadero: true,
+        admiteMascotas: false
+      };
+      const mockHabs = [
+        { habitacionId: 101, numero: '101', tipo: 'Suite', precioNoche: 85, capacidad: 2 },
+        { habitacionId: 102, numero: '102', tipo: 'Doble', precioNoche: 65, capacidad: 4 }
+      ];
+      
+      setPropiedad(mockProp);
+      setHabitaciones(mockHabs);
+      setForm(prev => ({ ...prev, habitacionIds: [101] }));
     } finally {
       setLoading(false);
     }
