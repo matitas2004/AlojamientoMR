@@ -44,13 +44,17 @@ export default function MisReservasPage() {
   const verFactura = async (reservaId) => {
     setLoadingFactura(true);
     try {
-      // Usar nuestro nuevo proxy de facturación
-      const res = await fetch(`/api/facturacion/reserva/${reservaId}`);
+      // Usar timeout porque si no existe la factura, el backend C# puede colgarse
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`/api/facturacion/reserva/${reservaId}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
       if (!res.ok) throw new Error('No se encontró factura');
       const data = await res.json();
       setSelectedFactura(data.length > 0 ? data[0] : data);
     } catch (err) {
-      toast.error('La factura aún no se ha generado para esta reserva.');
+      toast.error('La factura aún no se ha generado o el servidor está lento.');
     } finally {
       setLoadingFactura(false);
     }

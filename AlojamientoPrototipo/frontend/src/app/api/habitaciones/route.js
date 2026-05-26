@@ -1,9 +1,11 @@
+export const dynamic = 'force-dynamic';
+
 // API Route Handler - Proxy para habitaciones
 export async function GET(request) {
   try {
     const res = await fetch('https://alojamientosmr-api.onrender.com/api/v1/habitaciones', {
       headers: { 'Content-Type': 'application/json' },
-      next: { revalidate: 15 }, // Caché por 15 segundos para ultra-velocidad
+      cache: 'no-store'
     });
     const data = await res.json();
     const items = data?.value || data || [];

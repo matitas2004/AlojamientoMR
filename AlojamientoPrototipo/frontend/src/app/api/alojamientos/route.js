@@ -1,10 +1,12 @@
+export const dynamic = 'force-dynamic';
+
 // API Route Handler - Proxy para alojamientos
 // Esto corre en el SERVIDOR de Next.js, no en el navegador, así no hay CORS
 export async function GET(request) {
   try {
     const res = await fetch('https://alojamientosmr-api.onrender.com/api/v1/alojamientos', {
       headers: { 'Content-Type': 'application/json' },
-      next: { revalidate: 15 },
+      cache: 'no-store'
     });
     const data = await res.json();
     // La API de Render devuelve { value: [...], Count: X }
