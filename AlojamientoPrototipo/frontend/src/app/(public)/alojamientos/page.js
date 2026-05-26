@@ -1,67 +1,39 @@
 'use client';
-import { useEffect, useState, Suspense } from 'react';
+import { useState, Suspense, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { MapPin, Waves, Car, PawPrint, Star } from 'lucide-react';
-import api from '@/lib/api';
+import useApi from '@/lib/useApi';
 import styles from './alojamientos.module.css';
 
 function AlojamientosContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') || '';
-  
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadAlojamientos();
-  }, []);
+  const mockData = [
+    { alojamientoId: 101, nombre: 'Hotel Paraíso Azul', ciudad: 'Quito', tienePiscina: true, tieneParqueadero: true, admiteMascotas: false, estado: 'Activo', precioMinimo: 85 },
+    { alojamientoId: 102, nombre: 'Cabañas del Bosque', ciudad: 'Mindo', tienePiscina: false, tieneParqueadero: true, admiteMascotas: true, estado: 'Activo', precioMinimo: 45 },
+    { alojamientoId: 103, nombre: 'Suite Ejecutiva Centro', ciudad: 'Guayaquil', tienePiscina: true, tieneParqueadero: false, admiteMascotas: false, estado: 'Activo', precioMinimo: 120 },
+    { alojamientoId: 104, nombre: 'Hostal Sol y Luna', ciudad: 'Cuenca', tienePiscina: false, tieneParqueadero: true, admiteMascotas: true, estado: 'Activo', precioMinimo: 65 },
+  ];
 
-  const loadAlojamientos = async () => {
-    try {
-      const [alojRes, habRes] = await Promise.all([
-        api.get('/alojamientos').catch(() => ({ data: [] })),
-        api.get('/habitaciones').catch(() => ({ data: [] }))
-      ]);
-      
-      const alojamientosArray = Array.isArray(alojRes.data) ? alojRes.data : [];
-      const habitacionesArray = Array.isArray(habRes.data) ? habRes.data : [];
-      
-      // Calcular precio mínimo por alojamiento
-      const preciosMap = {};
-      habitacionesArray.forEach(h => {
-        if (!preciosMap[h.alojamientoId] || h.precioNoche < preciosMap[h.alojamientoId]) {
-          preciosMap[h.alojamientoId] = h.precioNoche;
-        }
-      });
+  const { data: alojamientos, isLoading: loadingAloj } = useApi('/alojamientos', { fallbackData: mockData });
+  const { data: habitaciones } = useApi('/habitaciones', { fallbackData: [] });
 
-      const conPrecios = alojamientosArray.map(a => ({
-        ...a,
-        precioMinimo: preciosMap[a.alojamientoId] || (45 + (a.alojamientoId % 5) * 10) // Fallback dinámico si no tiene habitaciones
-      }));
-
-      // Mostrar todos (estado Activo o Pendiente, no importa para la vitrina)
-      if (conPrecios.length > 0) {
-        setData(conPrecios);
-      } else {
-        loadMockData();
+  // Calcular precios mínimos con useMemo para rendimiento
+  const data = useMemo(() => {
+    const arr = Array.isArray(alojamientos) ? alojamientos : [];
+    const habs = Array.isArray(habitaciones) ? habitaciones : [];
+    const preciosMap = {};
+    habs.forEach(h => {
+      if (!preciosMap[h.alojamientoId] || h.precioNoche < preciosMap[h.alojamientoId]) {
+        preciosMap[h.alojamientoId] = h.precioNoche;
       }
-    } catch (err) {
-      console.warn("API no disponible, usando datos de demostración");
-      loadMockData();
-    } finally {
-      setLoading(false);
-    }
-  };
+    });
+    return arr.map(a => ({ ...a, precioMinimo: preciosMap[a.alojamientoId] || (45 + (a.alojamientoId % 5) * 10) }));
+  }, [alojamientos, habitaciones]);
 
-  const loadMockData = () => {
-    setData([
-      { alojamientoId: 101, nombre: 'Hotel Paraíso Azul', ciudad: 'Quito', tienePiscina: true, tieneParqueadero: true, admiteMascotas: false, estado: 'Activo', precioMinimo: 85 },
-      { alojamientoId: 102, nombre: 'Cabañas del Bosque', ciudad: 'Mindo', tienePiscina: false, tieneParqueadero: true, admiteMascotas: true, estado: 'Activo', precioMinimo: 45 },
-      { alojamientoId: 103, nombre: 'Suite Ejecutiva Centro', ciudad: 'Guayaquil', tienePiscina: true, tieneParqueadero: false, admiteMascotas: false, estado: 'Activo', precioMinimo: 120 },
-      { alojamientoId: 104, nombre: 'Hostal Sol y Luna', ciudad: 'Cuenca', tienePiscina: false, tieneParqueadero: true, admiteMascotas: true, estado: 'Activo', precioMinimo: 65 },
-    ]);
-  };
+  const loading = loadingAloj && data.length === 0;
 
   const filtered = data.filter(a => {
     if (!query) return true;
@@ -134,7 +106,7 @@ function AlojamientosContent() {
           {filtered.map((item, idx) => (
             <div key={item.alojamientoId} className={styles.card}>
               <div className={styles.imageBox}>
-                <img src={placeholderImages[idx % 4]} alt={item.nombre} className={styles.image} />
+                <img src={placeholderImages[idx % 4]} alt={item.nombre} className={styles.image} loading="lazy" />
                 <div className={styles.badge}><Star size={12} style={{ display: 'inline', marginRight: 4, color: '#d97706', fill: '#d97706' }} />4.8</div>
               </div>
               <div className={styles.content}>

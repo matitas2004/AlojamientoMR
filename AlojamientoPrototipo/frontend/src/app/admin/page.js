@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { Building2, BedDouble, CalendarDays, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import api from '@/lib/api';
+import useApi from '@/lib/useApi';
 import useAuthStore from '@/store/useAuthStore';
 
 const chartData = [
@@ -12,43 +12,21 @@ const chartData = [
 
 export default function AdminDashboard() {
   const { user } = useAuthStore();
-  const [stats, setStats] = useState({ alojamientos: 0, habitaciones: 0, reservas: 0, ocupacion: 0 });
-  const [loading, setLoading] = useState(true);
+  const { data: alojamientos, isLoading: loadingAloj } = useApi('/alojamientos', { fallbackData: [] });
+  const { data: habitaciones } = useApi('/habitaciones', { fallbackData: [] });
 
-  useEffect(() => {
-    loadStats();
-  }, []);
+  const stats = useMemo(() => {
+    const alojArr = Array.isArray(alojamientos) ? alojamientos : [];
+    const habArr = Array.isArray(habitaciones) ? habitaciones : [];
+    return {
+      alojamientos: alojArr.length,
+      habitaciones: habArr.length,
+      reservas: 0,
+      ocupacion: 72,
+    };
+  }, [alojamientos, habitaciones]);
 
-  const loadStats = async () => {
-    try {
-      const res = await api.get('/alojamientos');
-      const alojamientos = res.data?.value || res.data || [];
-      
-      let totalHabitaciones = 0;
-      const topAlojamientos = alojamientos.slice(0, 5);
-      
-      // Lanzar todas las peticiones en paralelo para que el dashboard cargue 5x más rápido
-      await Promise.all(
-        topAlojamientos.map(async (a) => {
-          try {
-            const habRes = await api.get(`/habitaciones/alojamiento/${a.alojamientoId}`);
-            totalHabitaciones += (Array.isArray(habRes.data) ? habRes.data : []).length;
-          } catch {}
-        })
-      );
-      setStats({
-        alojamientos: alojamientos.length,
-        habitaciones: totalHabitaciones,
-        reservas: 0,
-        ocupacion: 72,
-      });
-    } catch (err) {
-      console.warn('Stats: API no disponible, usando valores por defecto');
-      setStats({ alojamientos: 3, habitaciones: 8, reservas: 12, ocupacion: 72 });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loading = loadingAloj && stats.alojamientos === 0;
 
   const statCards = [
     { label: 'Alojamientos', value: stats.alojamientos, icon: Building2, colorClass: 'blue' },

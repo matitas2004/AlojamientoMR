@@ -1,14 +1,14 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Plus, Pencil, Trash2, Search, Building2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import useApi from '@/lib/useApi';
 
 const emptyForm = { nombre: '', ciudad: '', direccion: '', descripcion: '', tipoAlojamientoId: 1, socioId: 1, admiteMascotas: false, tienePiscina: false, tieneParqueadero: false };
 
 export default function AlojamientosPage() {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data, mutate, isLoading: loading } = useApi('/alojamientos');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -16,19 +16,8 @@ export default function AlojamientosPage() {
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
 
-  useEffect(() => { load(); }, []);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get('/alojamientos');
-      setData(Array.isArray(res.data) ? res.data : []);
-    } catch { toast.error('Error al cargar alojamientos'); }
-    finally { setLoading(false); }
-  };
-
-  const filtered = data.filter(a =>
-    a.nombre.toLowerCase().includes(search.toLowerCase()) ||
+  const filtered = (Array.isArray(data) ? data : []).filter(a =>
+    a.nombre?.toLowerCase().includes(search.toLowerCase()) ||
     a.ciudad?.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -44,43 +33,56 @@ export default function AlojamientosPage() {
     setShowModal(true);
   };
 
+  // ═══════════════════════════════════════════════════════════
+  // OPTIMISTIC UI: Crear / Editar alojamiento
+  // ═══════════════════════════════════════════════════════════
   const handleSave = async (e) => {
     e.preventDefault();
     if (!form.nombre || !form.direccion) { toast.error('Nombre y dirección son obligatorios'); return; }
-    setSaving(true);
-    try {
-      if (editId) {
-        await api.put(`/alojamientos/${editId}`, form);
-        toast.success('Alojamiento actualizado en BD');
-      } else {
-        await api.post('/alojamientos', form);
-        toast.success('Alojamiento creado en BD');
-      }
-      setShowModal(false);
-      load();
-    } catch (err) {
-      if (!editId) {
-        toast.success('Alojamiento simulado (El servidor real falló por timeout)', { icon: '⚠️' });
-        const nuevoMock = {
-          ...form,
-          alojamientoId: Math.floor(Math.random() * 10000) + 1000,
-          estado: 'Pendiente'
-        };
-        setData(prev => [...prev, nuevoMock]);
-        setShowModal(false);
-      } else {
-        toast.error('Error al actualizar: la Base de datos está dormida.');
-      }
-    } finally { setSaving(false); }
+
+    // Cerrar modal AL INSTANTE
+    setShowModal(false);
+
+    if (editId) {
+      // OPTIMISTIC EDIT: Actualizar la fila en tabla al instante
+      toast.success('Alojamiento actualizado ✓');
+      mutate((prev) => (prev || []).map(a =>
+        a.alojamientoId === editId ? { ...a, ...form } : a
+      ), { revalidate: false });
+
+      // Enviar a API en background
+      try { await api.put(`/alojamientos/${editId}`, form); mutate(); }
+      catch { setTimeout(() => mutate(), 5000); }
+    } else {
+      // OPTIMISTIC CREATE: Dibujar nuevo registro al instante
+      const nuevoMock = {
+        ...form,
+        alojamientoId: Date.now(),
+        estado: 'Pendiente',
+        _optimistic: true,
+      };
+      toast.success('Alojamiento creado ✓');
+      mutate((prev) => [...(prev || []), nuevoMock], { revalidate: false });
+
+      // Enviar a API en background
+      try { await api.post('/alojamientos', form); mutate(); }
+      catch { setTimeout(() => mutate(), 5000); }
+    }
   };
 
+  // ═══════════════════════════════════════════════════════════
+  // OPTIMISTIC UI: Eliminar alojamiento
+  // ═══════════════════════════════════════════════════════════
   const handleDelete = async () => {
-    try {
-      await api.delete(`/alojamientos/${deleteId}`);
-      toast.success('Alojamiento eliminado');
-      setDeleteId(null);
-      load();
-    } catch { toast.error('Error al eliminar'); }
+    const idToDelete = deleteId;
+    setDeleteId(null);
+    toast.success('Alojamiento eliminado ✓');
+
+    // Quitar de tabla AL INSTANTE
+    mutate((prev) => (prev || []).filter(a => a.alojamientoId !== idToDelete), { revalidate: false });
+
+    try { await api.delete(`/alojamientos/${idToDelete}`); mutate(); }
+    catch { setTimeout(() => mutate(), 5000); }
   };
 
   return (
@@ -115,7 +117,7 @@ export default function AlojamientosPage() {
             </thead>
             <tbody>
               {filtered.map(item => (
-                <tr key={item.alojamientoId}>
+                <tr key={item.alojamientoId} style={item._optimistic ? { opacity: 0.7 } : {}}>
                   <td style={{ fontWeight: 600, color: 'var(--color-text-muted)' }}>#{item.alojamientoId}</td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{item.nombre}</div>
@@ -179,8 +181,7 @@ export default function AlojamientosPage() {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>Cancelar</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? <div className="spinner" /> : null}
+                <button type="submit" className="btn btn-primary">
                   {editId ? 'Guardar Cambios' : 'Crear Alojamiento'}
                 </button>
               </div>

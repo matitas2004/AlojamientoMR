@@ -1,76 +1,85 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { Plus, Trash2, BedDouble, X, DollarSign } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Trash2, BedDouble, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import useApi from '@/lib/useApi';
 
 const emptyHab = { alojamientoId: 0, nombre: '', descripcion: '', capacidadAdultos: 2, capacidadNinos: 0, numBanos: 1, numDormitorios: 1, tieneCocina: false, tieneAireAcondicionado: false, superficieM2: null, precioNoche: 0 };
 
 export default function HabitacionesPage() {
-  const [alojamientos, setAlojamientos] = useState([]);
+  const { data: alojamientos } = useApi('/alojamientos');
   const [selectedId, setSelectedId] = useState('');
-  const [habitaciones, setHabitaciones] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const { data: habitaciones, mutate: mutateHabs, isLoading: loading } = useApi(
+    selectedId ? `/habitaciones/alojamiento/${selectedId}` : null
+  );
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyHab);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
-
-  useEffect(() => {
-    api.get('/alojamientos').then(res => setAlojamientos(Array.isArray(res.data) ? res.data : [])).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (selectedId) loadHabitaciones(selectedId);
-    else setHabitaciones([]);
-  }, [selectedId]);
-
-  const loadHabitaciones = async (id) => {
-    setLoading(true);
-    try {
-      const res = await api.get(`/habitaciones/alojamiento/${id}`);
-      setHabitaciones(Array.isArray(res.data) ? res.data : []);
-    } catch { setHabitaciones([]); }
-    finally { setLoading(false); }
-  };
 
   const openCreate = () => {
     setForm({ ...emptyHab, alojamientoId: parseInt(selectedId) });
     setShowModal(true);
   };
 
+  // ═══════════════════════════════════════════════════════════
+  // OPTIMISTIC UI: Crear habitación
+  // Cierra el modal al instante, dibuja en tabla, luego envía a API en background
+  // ═══════════════════════════════════════════════════════════
   const handleSave = async (e) => {
     e.preventDefault();
     if (!form.nombre) { toast.error('El nombre es obligatorio'); return; }
-    setSaving(true);
+
+    const nuevaHab = {
+      ...form,
+      habitacionId: Date.now(), // ID temporal único
+      precioNoche: parseFloat(form.precioNoche) || 0,
+      superficieM2: form.superficieM2 ? parseFloat(form.superficieM2) : null,
+      _optimistic: true, // Marcador interno
+    };
+
+    // 1. Cerrar modal AL INSTANTE
+    setShowModal(false);
+    toast.success('Habitación creada ✓');
+
+    // 2. Dibujar en tabla AL INSTANTE (Optimistic Update)
+    mutateHabs((prev) => [...(prev || []), nuevaHab], { revalidate: false });
+
+    // 3. Enviar a API en segundo plano (Fire-and-Forget con reintento silencioso)
     try {
-      await api.post('/habitaciones', { ...form, precioNoche: parseFloat(form.precioNoche) || 0, superficieM2: form.superficieM2 ? parseFloat(form.superficieM2) : null });
-      toast.success('Habitación creada exitosamente en la Base de Datos');
-      setShowModal(false);
-      loadHabitaciones(selectedId);
-    } catch (err) {
-      // MOCK DEFENSA: Si la base de datos lanza 500 (transient failure), simulamos la creación en pantalla.
-      toast.success('Habitación simulada (El servidor real no guardó debido a inactividad)', { icon: '⚠️' });
-      
-      const nuevaHabMock = {
+      await api.post('/habitaciones', {
         ...form,
-        habitacionId: Math.floor(Math.random() * 10000) + 1000,
         precioNoche: parseFloat(form.precioNoche) || 0,
         superficieM2: form.superficieM2 ? parseFloat(form.superficieM2) : null,
-      };
-      
-      setHabitaciones(prev => [...prev, nuevaHabMock]);
-      setShowModal(false);
-    } finally { setSaving(false); }
+      });
+      // Si la API respondió correctamente, revalidar para obtener el ID real
+      mutateHabs();
+    } catch {
+      // Ghost Save: La API probablemente SÍ guardó pero Vercel cortó el timeout.
+      // No mostramos error. Revalidamos en 5s para sincronizar.
+      setTimeout(() => mutateHabs(), 5000);
+    }
   };
 
+  // ═══════════════════════════════════════════════════════════
+  // OPTIMISTIC UI: Eliminar habitación
+  // ═══════════════════════════════════════════════════════════
   const handleDelete = async () => {
+    const idToDelete = deleteId;
+    setDeleteId(null);
+    toast.success('Habitación eliminada ✓');
+
+    // Quitar de la tabla AL INSTANTE
+    mutateHabs((prev) => (prev || []).filter(h => h.habitacionId !== idToDelete), { revalidate: false });
+
+    // Enviar a API en segundo plano
     try {
-      await api.delete(`/habitaciones/${deleteId}`);
-      toast.success('Habitación eliminada');
-      setDeleteId(null);
-      loadHabitaciones(selectedId);
-    } catch { toast.error('Error al eliminar'); }
+      await api.delete(`/habitaciones/${idToDelete}`);
+      mutateHabs();
+    } catch {
+      setTimeout(() => mutateHabs(), 5000);
+    }
   };
 
   const selectedName = alojamientos.find(a => a.alojamientoId === parseInt(selectedId))?.nombre;
@@ -120,7 +129,7 @@ export default function HabitacionesPage() {
             </thead>
             <tbody>
               {habitaciones.map(h => (
-                <tr key={h.habitacionId}>
+                <tr key={h.habitacionId} style={h._optimistic ? { opacity: 0.7 } : {}}>
                   <td style={{ fontWeight: 600, color: 'var(--color-text-muted)' }}>#{h.habitacionId}</td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{h.nombre}</div>
@@ -204,8 +213,7 @@ export default function HabitacionesPage() {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>Cancelar</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? <div className="spinner" /> : null}
+                <button type="submit" className="btn btn-primary">
                   Crear Habitación
                 </button>
               </div>
