@@ -21,8 +21,8 @@ export default function AdminDashboard() {
     return {
       alojamientos: alojArr.length,
       habitaciones: habArr.length,
-      reservas: 0,
-      ocupacion: 72,
+      reservas: 'N/A', // Backend CQRS no permite listar todas las reservas globalmente
+      ocupacion: 'N/A',
     };
   }, [alojamientos, habitaciones]);
 

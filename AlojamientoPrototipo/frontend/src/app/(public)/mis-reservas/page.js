@@ -26,20 +26,15 @@ export default function MisReservasPage() {
       if (res.data && res.data.length > 0) {
         setReservas(res.data);
       } else {
-        loadMockData();
+        setReservas([]);
       }
-    } catch {
-      loadMockData();
+    } catch (err) {
+      console.error("Error cargando reservas", err);
+      toast.error("Hubo un problema al cargar tus reservas.");
+      setReservas([]);
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadMockData = () => {
-    setReservas([
-      { reservaId: 101, codigo: 'RES-X7B9K', propiedadNombre: 'Hotel Paraíso', fechaCheckIn: '2026-06-01T14:00:00Z', fechaCheckOut: '2026-06-05T11:00:00Z', total: 450.00, estado: 'Confirmada' },
-      { reservaId: 104, codigo: 'RES-W3H8Q', propiedadNombre: 'Cabañas del Bosque', fechaCheckIn: '2026-04-15T13:00:00Z', fechaCheckOut: '2026-04-20T11:00:00Z', total: 850.00, estado: 'Completada' },
-    ]);
   };
 
   const getStatusBadge = (estado) => {
@@ -55,7 +50,7 @@ export default function MisReservasPage() {
   const formatDate = (isoString) => {
     if (!isoString) return '—';
     const d = new Date(isoString);
-    return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }).format(d);
+    return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(d);
   };
 
   if (!isAuthenticated) {
@@ -97,7 +92,7 @@ export default function MisReservasPage() {
                   <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-muted)', letterSpacing: '0.05em' }}>{r.codigo}</span>
                   {getStatusBadge(r.estado || '')}
                 </div>
-                <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.5rem', color: 'var(--color-primary-dark)', marginBottom: '1rem' }}>{r.propiedadNombre}</h3>
+                <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.5rem', color: 'var(--color-primary-dark)', marginBottom: '1rem' }}>Reserva para Alojamiento #{r.alojamientoId}</h3>
                 
                 <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
                   <div>
@@ -116,7 +111,22 @@ export default function MisReservasPage() {
                   <div className="text-xs text-muted" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>Total pagado</div>
                   <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--color-accent-dark)' }}>${r.total?.toFixed(2)}</div>
                 </div>
-                <button className="btn btn-outline btn-sm">Ver Factura</button>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button className="btn btn-outline btn-sm">Ver Factura</button>
+                  {r.estado === 'Pendiente' && (
+                    <button className="btn btn-outline btn-sm" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={async () => {
+                      if(confirm('¿Seguro que deseas cancelar esta reserva?')) {
+                        try {
+                          await reservasApi.patch(`/reservas/${r.reservaId}/estado`, { nuevoEstado: "Cancelada" });
+                          loadReservas();
+                          toast.success("Reserva cancelada");
+                        } catch {
+                          toast.error("Error al cancelar la reserva");
+                        }
+                      }
+                    }}>Cancelar</button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
