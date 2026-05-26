@@ -191,7 +191,7 @@ export default function PropiedadDetallePage({ params }) {
     try {
       // Intentar reservar en la API real (Si falla usamos el mock)
       await reservasApi.post('/reservas', {
-        clienteId: user?.clienteId || 1, // Fallback si no tiene id
+        clienteId: user?.usuarioId || user?.clienteId || user?.id || 1, // Fallback si no tiene id
         alojamientoId: parseInt(id),
         fechaCheckIn: new Date(form.fechaCheckIn).toISOString().split('T')[0],
         fechaCheckOut: new Date(form.fechaCheckOut).toISOString().split('T')[0],

@@ -24,7 +24,9 @@ export default function MisReservasPage() {
   const loadReservas = async () => {
     setLoading(true);
     try {
-      const res = await reservasApi.get(`/reservas/cliente/${user.clienteId || user.id}`);
+      const clientId = user.usuarioId || user.clienteId || user.id;
+      if (!clientId) throw new Error('No user ID');
+      const res = await reservasApi.get(`/reservas/cliente/${clientId}`);
       if (res.data && res.data.length > 0) {
         setReservas(res.data);
       } else {
