@@ -1,10 +1,12 @@
+export const dynamic = 'force-dynamic';
+
 // BFF Aggregation para obtener todas las reservas de todos los clientes
 export async function GET(request) {
   try {
     // 1. Obtener todos los clientes
     const usersRes = await fetch('https://usuariosmr-api.onrender.com/api/v1/usuarios', {
       headers: { 'Content-Type': 'application/json' },
-      next: { revalidate: 30 }, // cache corto
+      cache: 'no-store'
     });
     
     if (!usersRes.ok) {
@@ -23,7 +25,7 @@ export async function GET(request) {
     const promises = validUsers.map(u => 
       fetch(`https://reservasmr-api.onrender.com/api/v1/Reservas/cliente/${u.usuarioId || u.id}`, {
         headers: { 'Content-Type': 'application/json' },
-        next: { revalidate: 0 },
+        cache: 'no-store'
       })
       .then(async r => {
         if (!r.ok) return [];
