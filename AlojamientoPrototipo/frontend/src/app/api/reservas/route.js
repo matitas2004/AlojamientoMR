@@ -10,7 +10,7 @@ export async function GET(request) {
     
     const res = await fetch(url, {
       headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
+      next: { revalidate: 15 },
     });
     const data = await res.json();
     const items = data?.value || data || [];
@@ -28,7 +28,14 @@ export async function POST(request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
+    
+    let data;
+    try { data = await res.json(); } catch { data = { message: res.statusText }; }
+    
+    if (!res.ok) {
+      return Response.json(data, { status: res.status });
+    }
+    
     return Response.json(data, { status: res.status });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });

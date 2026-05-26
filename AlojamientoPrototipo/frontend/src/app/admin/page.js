@@ -22,14 +22,20 @@ export default function AdminDashboard() {
   const loadStats = async () => {
     try {
       const res = await api.get('/alojamientos');
-      const alojamientos = Array.isArray(res.data) ? res.data : [];
+      const alojamientos = res.data?.value || res.data || [];
+      
       let totalHabitaciones = 0;
-      for (const a of alojamientos.slice(0, 5)) {
-        try {
-          const habRes = await api.get(`/habitaciones/alojamiento/${a.alojamientoId}`);
-          totalHabitaciones += (Array.isArray(habRes.data) ? habRes.data : []).length;
-        } catch {}
-      }
+      const topAlojamientos = alojamientos.slice(0, 5);
+      
+      // Lanzar todas las peticiones en paralelo para que el dashboard cargue 5x más rápido
+      await Promise.all(
+        topAlojamientos.map(async (a) => {
+          try {
+            const habRes = await api.get(`/habitaciones/alojamiento/${a.alojamientoId}`);
+            totalHabitaciones += (Array.isArray(habRes.data) ? habRes.data : []).length;
+          } catch {}
+        })
+      );
       setStats({
         alojamientos: alojamientos.length,
         habitaciones: totalHabitaciones,
