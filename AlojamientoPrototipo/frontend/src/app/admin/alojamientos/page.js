@@ -52,7 +52,10 @@ export default function AlojamientosPage() {
 
       // Enviar a API en background
       try { await api.put(`/alojamientos/${editId}`, form); mutate(); }
-      catch { setTimeout(() => mutate(), 5000); }
+      catch (err) {
+        toast.error('Error al actualizar en la BD. Revertiendo.');
+        mutate(); // Rollback
+      }
     } else {
       // OPTIMISTIC CREATE: Dibujar nuevo registro al instante
       const nuevoMock = {
@@ -66,7 +69,10 @@ export default function AlojamientosPage() {
 
       // Enviar a API en background
       try { await api.post('/alojamientos', form); mutate(); }
-      catch { setTimeout(() => mutate(), 5000); }
+      catch (err) {
+        toast.error('Error al crear en la BD. Revertiendo.');
+        mutate(); // Rollback
+      }
     }
   };
 
@@ -82,7 +88,10 @@ export default function AlojamientosPage() {
     mutate((prev) => (prev || []).filter(a => a.alojamientoId !== idToDelete), { revalidate: false });
 
     try { await api.delete(`/alojamientos/${idToDelete}`); mutate(); }
-    catch { setTimeout(() => mutate(), 5000); }
+    catch (err) {
+      toast.error('Error al eliminar en la BD. Revertiendo.');
+      mutate(); // Rollback
+    }
   };
 
   return (

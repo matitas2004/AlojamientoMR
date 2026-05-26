@@ -53,12 +53,10 @@ export default function HabitacionesPage() {
         precioNoche: parseFloat(form.precioNoche) || 0,
         superficieM2: form.superficieM2 ? parseFloat(form.superficieM2) : null,
       });
-      // Si la API respondió correctamente, revalidar para obtener el ID real
-      mutateHabs();
-    } catch {
-      // Ghost Save: La API probablemente SÍ guardó pero Vercel cortó el timeout.
-      // No mostramos error. Revalidamos en 5s para sincronizar.
-      setTimeout(() => mutateHabs(), 5000);
+      mutateHabs(); // Sincronización real con BD
+    } catch (err) {
+      toast.error('Error al guardar en BD. Revertiendo cambios.');
+      mutateHabs(); // Rollback (borra la UI optimista fallida)
     }
   };
 
@@ -77,8 +75,9 @@ export default function HabitacionesPage() {
     try {
       await api.delete(`/habitaciones/${idToDelete}`);
       mutateHabs();
-    } catch {
-      setTimeout(() => mutateHabs(), 5000);
+    } catch (err) {
+      toast.error('Error al eliminar en la BD. Revertiendo.');
+      mutateHabs(); // Rollback
     }
   };
 

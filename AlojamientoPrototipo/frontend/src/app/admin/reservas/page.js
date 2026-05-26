@@ -5,12 +5,6 @@ import { reservasApi } from '@/lib/api';
 import useApi from '@/lib/useApi';
 import toast from 'react-hot-toast';
 
-const mockData = [
-  { reservaId: 101, codigo: 'RES-X7B9K', clienteId: 3, nombreCliente: 'Ana Martínez', propiedadNombre: 'Hotel Paraíso', fechaCheckIn: '2026-06-01T14:00:00Z', fechaCheckOut: '2026-06-05T11:00:00Z', total: 450.00, estado: 'Confirmada' },
-  { reservaId: 102, codigo: 'RES-M4L2P', clienteId: 5, nombreCliente: 'Roberto Gómez', propiedadNombre: 'Cabañas del Sol', fechaCheckIn: '2026-06-10T15:00:00Z', fechaCheckOut: '2026-06-12T10:00:00Z', total: 120.50, estado: 'Pendiente' },
-  { reservaId: 103, codigo: 'RES-T9V1N', clienteId: 8, nombreCliente: 'Lucía Fernández', propiedadNombre: 'Suite Ejecutiva Centro', fechaCheckIn: '2026-05-20T14:00:00Z', fechaCheckOut: '2026-05-22T12:00:00Z', total: 180.00, estado: 'Completada' },
-  { reservaId: 104, codigo: 'RES-W3H8Q', clienteId: 2, nombreCliente: 'Carlos López', propiedadNombre: 'Hotel Paraíso', fechaCheckIn: '2026-07-15T13:00:00Z', fechaCheckOut: '2026-07-20T11:00:00Z', total: 850.00, estado: 'Cancelada' },
-];
 
 export default function ReservasPage() {
   const { data: reservasRaw, isLoading: loadingAloj, mutate } = useApi('/reservas', { fallbackData: [] });
@@ -18,8 +12,7 @@ export default function ReservasPage() {
   const [selectedReserva, setSelectedReserva] = useState(null);
 
   const reservas = useMemo(() => {
-    const raw = Array.isArray(reservasRaw) ? reservasRaw : [];
-    return raw.length > 0 ? raw : mockData;
+    return Array.isArray(reservasRaw) ? reservasRaw : [];
   }, [reservasRaw]);
 
   const loading = loadingAloj && reservasRaw.length === 0;
@@ -27,9 +20,9 @@ export default function ReservasPage() {
 
 
   const cambiarEstado = async (reservaId, nuevoEstado) => {
-    // Optimistic UI update
+    // UI update (sin mockData)
     mutate((prev) => {
-      const arr = Array.isArray(prev) ? prev : mockData;
+      const arr = Array.isArray(prev) ? prev : [];
       return arr.map(r => r.reservaId === reservaId ? { ...r, estado: nuevoEstado } : r);
     }, { revalidate: false });
 
@@ -39,8 +32,9 @@ export default function ReservasPage() {
     try {
       await reservasApi.put(`/reservas/${reservaId}`, { estado: nuevoEstado });
       mutate();
-    } catch {
-      // Ignorar, ya que mockeamos la UI
+    } catch (err) {
+      toast.error('Error guardando en la DB. Los cambios se han revertido.');
+      mutate(); // Forzar revalidación para revertir en caso de error real
     }
   };
 
@@ -57,7 +51,9 @@ export default function ReservasPage() {
   const formatDate = (isoString) => {
     if (!isoString) return '—';
     const d = new Date(isoString);
-    return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }).format(d);
+    return new Intl.DateTimeFormat('es-ES', { 
+      day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' 
+    }).format(d);
   };
 
   const filtered = reservas.filter(r => 

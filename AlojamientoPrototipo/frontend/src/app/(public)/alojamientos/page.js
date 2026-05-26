@@ -10,19 +10,12 @@ function AlojamientosContent() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') || '';
 
-  const mockData = [
-    { alojamientoId: 101, nombre: 'Hotel Paraíso Azul', ciudad: 'Quito', tienePiscina: true, tieneParqueadero: true, admiteMascotas: false, estado: 'Activo', precioMinimo: 85 },
-    { alojamientoId: 102, nombre: 'Cabañas del Bosque', ciudad: 'Mindo', tienePiscina: false, tieneParqueadero: true, admiteMascotas: true, estado: 'Activo', precioMinimo: 45 },
-    { alojamientoId: 103, nombre: 'Suite Ejecutiva Centro', ciudad: 'Guayaquil', tienePiscina: true, tieneParqueadero: false, admiteMascotas: false, estado: 'Activo', precioMinimo: 120 },
-    { alojamientoId: 104, nombre: 'Hostal Sol y Luna', ciudad: 'Cuenca', tienePiscina: false, tieneParqueadero: true, admiteMascotas: true, estado: 'Activo', precioMinimo: 65 },
-  ];
-
-  const { data: alojamientos, isLoading: loadingAloj } = useApi('/alojamientos', { fallbackData: mockData });
+  const { data: alojamientosRaw, isLoading: loadingAloj } = useApi('/alojamientos', { fallbackData: [] });
   const { data: habitaciones } = useApi('/habitaciones', { fallbackData: [] });
 
   // Calcular precios mínimos con useMemo para rendimiento
   const data = useMemo(() => {
-    const arr = Array.isArray(alojamientos) ? alojamientos : [];
+    const arr = Array.isArray(alojamientosRaw) ? alojamientosRaw : [];
     const habs = Array.isArray(habitaciones) ? habitaciones : [];
     const preciosMap = {};
     habs.forEach(h => {
@@ -31,7 +24,7 @@ function AlojamientosContent() {
       }
     });
     return arr.map(a => ({ ...a, precioMinimo: preciosMap[a.alojamientoId] || (45 + (a.alojamientoId % 5) * 10) }));
-  }, [alojamientos, habitaciones]);
+  }, [alojamientosRaw, habitaciones]);
 
   const loading = loadingAloj && data.length === 0;
 

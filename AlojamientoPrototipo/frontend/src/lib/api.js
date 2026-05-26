@@ -1,6 +1,5 @@
 import axios from 'axios';
-
-// ========================================================
+import axiosRetry from 'axios-retry';
 // ARQUITECTURA: Backend-for-Frontend (BFF) con API Routes
 // ========================================================
 // El navegador NUNCA llama directamente a Render.
@@ -17,6 +16,19 @@ const api = axios.create({
   baseURL: '/api',  // Apunta a src/app/api/* (API Routes de Next.js)
   headers: { 'Content-Type': 'application/json' },
   timeout: 180000,
+});
+
+// Implementar Retry para 500/504 (Cold Starts/Transient Failures)
+axiosRetry(api, { 
+  retries: 3, 
+  retryDelay: (retryCount) => {
+    return retryCount * 3000; // 3s, 6s, 9s
+  },
+  retryCondition: (error) => {
+    // Reintentar si es 500, 502, 503, 504 o error de red
+    return axiosRetry.isNetworkOrIdempotentRequestError(error) || 
+           (error.response && error.response.status >= 500);
+  }
 });
 
 api.interceptors.request.use((config) => {
