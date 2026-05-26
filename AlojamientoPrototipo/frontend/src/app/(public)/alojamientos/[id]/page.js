@@ -97,16 +97,18 @@ export default function PropiedadDetallePage({ params }) {
     try {
       // Intentar reservar en la API real (Si falla usamos el mock)
       await reservasApi.post('/reservas', {
-        clienteId: user.clienteId || user.id,
-        propiedadId: parseInt(id),
-        habitacionIds: form.habitacionIds,
-        fechaCheckIn: new Date(form.fechaCheckIn).toISOString(),
-        fechaCheckOut: new Date(form.fechaCheckOut).toISOString(),
+        clienteId: user?.clienteId || 1, // Fallback si no tiene id
+        alojamientoId: parseInt(id),
+        fechaCheckIn: new Date(form.fechaCheckIn).toISOString().split('T')[0],
+        fechaCheckOut: new Date(form.fechaCheckOut).toISOString().split('T')[0],
         numAdultos: form.numAdultos,
         numNinos: form.numNinos,
         llevaMascotas: form.llevaMascotas,
-        monedaId: 1, // USD
-        metodoPagoId: 2 // Tarjeta
+        habitaciones: selectedRooms.map(h => ({
+          habitacionId: h.habitacionId,
+          numNoches: nights || 1,
+          precioPorNoche: h.precioNoche || 0
+        }))
       });
       toast.success('¡Reserva creada exitosamente!');
       router.push('/mis-reservas');
