@@ -131,7 +131,7 @@ export default function PropiedadDetallePage({ params }) {
       console.warn("API falló, usando mock de éxito", err);
       // Simular éxito para el prototipo si la API no está lista
       setTimeout(() => {
-        toast.success('¡Reserva creada exitosamente!');
+        toast.success('Reserva simulada (El servidor real no guardó debido a inactividad)', { icon: '⚠️' });
         router.push('/mis-reservas');
       }, 1000);
     } finally {
