@@ -12,6 +12,8 @@ export default function MisReservasPage() {
   const router = useRouter();
   const [reservas, setReservas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedFactura, setSelectedFactura] = useState(null);
+  const [loadingFactura, setLoadingFactura] = useState(false);
 
   useEffect(() => {
     // Si no está autenticado redirigimos o esperamos a que AuthStore hidrate
@@ -34,6 +36,21 @@ export default function MisReservasPage() {
       setReservas([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const verFactura = async (reservaId) => {
+    setLoadingFactura(true);
+    try {
+      // Usar nuestro nuevo proxy de facturación
+      const res = await fetch(`/api/facturacion/reserva/${reservaId}`);
+      if (!res.ok) throw new Error('No se encontró factura');
+      const data = await res.json();
+      setSelectedFactura(data.length > 0 ? data[0] : data);
+    } catch (err) {
+      toast.error('La factura aún no se ha generado para esta reserva.');
+    } finally {
+      setLoadingFactura(false);
     }
   };
 
@@ -112,7 +129,7 @@ export default function MisReservasPage() {
                   <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--color-accent-dark)' }}>${r.total?.toFixed(2)}</div>
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <button className="btn btn-outline btn-sm">Ver Factura</button>
+                  <button className="btn btn-outline btn-sm" onClick={() => verFactura(r.reservaId)}>Ver Factura</button>
                   {r.estado === 'Pendiente' && (
                     <button className="btn btn-outline btn-sm" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={async () => {
                       if(confirm('¿Seguro que deseas cancelar esta reserva?')) {
@@ -130,6 +147,48 @@ export default function MisReservasPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {selectedFactura && (
+        <div className="modal-overlay" onClick={() => setSelectedFactura(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.25rem' }}>Factura #{selectedFactura.facturaId || 'N/A'}</h3>
+                <p className="text-secondary text-sm">Reserva Cód. {selectedFactura.reservaId}</p>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedFactura(null)}><XCircle size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ background: 'var(--color-bg-secondary)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.875rem' }}>
+                  <span>Estado</span>
+                  <strong>{selectedFactura.estado || 'Emitida'}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.875rem' }}>
+                  <span>Fecha de Emisión</span>
+                  <span>{new Date(selectedFactura.fechaEmision || new Date()).toLocaleDateString('es-ES')}</span>
+                </div>
+                <hr style={{ borderColor: 'var(--color-border)', margin: '1rem 0' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.875rem' }}>
+                  <span>Subtotal</span>
+                  <span>${(selectedFactura.subtotal || ((selectedFactura.total || 0)/1.15)).toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.875rem' }}>
+                  <span>IVA (15%)</span>
+                  <span>${(selectedFactura.impuestos || ((selectedFactura.total || 0) - (selectedFactura.total || 0)/1.15)).toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)', fontWeight: 800, fontSize: '1.25rem', color: 'var(--color-primary)' }}>
+                  <span>Total a Pagar</span>
+                  <span>${(selectedFactura.total || 0).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" style={{ width: '100%' }} onClick={() => setSelectedFactura(null)}>Cerrar</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

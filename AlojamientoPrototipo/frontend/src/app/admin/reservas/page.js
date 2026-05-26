@@ -1,37 +1,60 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { CalendarDays, Search, Check, Clock, XCircle, Eye } from 'lucide-react';
 import { reservasApi } from '@/lib/api';
 import useApi from '@/lib/useApi';
 import toast from 'react-hot-toast';
 
 export default function ReservasPage() {
-  // Ahora usamos nuestro BFF Aggregation endpoint interno
-  const { data: reservasRaw, isLoading, mutate } = useApi('/reservas/todas', { fallbackData: [] });
+  const [reservas, setReservas] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedReserva, setSelectedReserva] = useState(null);
 
-  const reservas = useMemo(() => {
-    return Array.isArray(reservasRaw) ? reservasRaw : [];
-  }, [reservasRaw]);
+  const fetchAllReservas = async () => {
+    setLoading(true);
+    try {
+      const usersRes = await fetch('/api/usuarios');
+      const users = await usersRes.json();
+      const validUsers = Array.isArray(users) ? users : [];
 
-  const loading = isLoading && reservasRaw.length === 0;
+      const promises = validUsers.map(u => 
+        fetch(`/api/reservas/cliente/${u.usuarioId || u.id}`)
+          .then(res => res.json())
+          .catch(() => [])
+      );
+
+      const results = await Promise.allSettled(promises);
+      let todas = [];
+      results.forEach(res => {
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          todas = [...todas, ...res.value];
+        }
+      });
+      setReservas(todas);
+    } catch (err) {
+      console.error("Client-Side Aggregation falló", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllReservas();
+  }, []);
 
   const cambiarEstado = async (reservaId, nuevoEstado) => {
-    mutate((prev) => {
-      const arr = Array.isArray(prev) ? prev : [];
-      return arr.map(r => r.reservaId === reservaId ? { ...r, estado: nuevoEstado } : r);
-    }, { revalidate: false });
+    setReservas(prev => prev.map(r => r.reservaId === reservaId ? { ...r, estado: nuevoEstado } : r));
 
     toast.success(`Reserva marcada como ${nuevoEstado}`);
     
     try {
       // El PATCH va directamente al backend C#
       await reservasApi.patch(`/reservas/${reservaId}/estado`, { estado: nuevoEstado });
-      mutate();
+      fetchAllReservas();
     } catch (err) {
       toast.error('Error guardando en la DB. Los cambios se han revertido.');
-      mutate();
+      fetchAllReservas();
     }
   };
 
