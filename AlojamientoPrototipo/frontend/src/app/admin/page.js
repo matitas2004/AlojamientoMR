@@ -5,26 +5,54 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import useApi from '@/lib/useApi';
 import useAuthStore from '@/store/useAuthStore';
 
-const chartData = [
-  { mes: 'Ene', reservas: 12 }, { mes: 'Feb', reservas: 19 }, { mes: 'Mar', reservas: 8 },
-  { mes: 'Abr', reservas: 25 }, { mes: 'May', reservas: 32 }, { mes: 'Jun', reservas: 18 },
-];
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
 export default function AdminDashboard() {
   const { user } = useAuthStore();
   const { data: alojamientos, isLoading: loadingAloj } = useApi('/alojamientos', { fallbackData: [] });
   const { data: habitaciones } = useApi('/habitaciones', { fallbackData: [] });
+  const { data: reservasRaw } = useApi('/reservas/todas', { fallbackData: [] });
+
+  const reservas = useMemo(() => Array.isArray(reservasRaw) ? reservasRaw : [], [reservasRaw]);
 
   const stats = useMemo(() => {
     const alojArr = Array.isArray(alojamientos) ? alojamientos : [];
     const habArr = Array.isArray(habitaciones) ? habitaciones : [];
+    const activas = reservas.filter(r => (r.estado || '').toLowerCase() !== 'cancelada');
+    const ocupacion = habArr.length > 0 ? Math.round((activas.length / habArr.length) * 100) : 0;
     return {
       alojamientos: alojArr.length,
       habitaciones: habArr.length,
-      reservas: 'N/A', // Backend CQRS no permite listar todas las reservas globalmente
-      ocupacion: 'N/A',
+      reservas: reservas.length,
+      ocupacion: Math.min(ocupacion, 100),
     };
-  }, [alojamientos, habitaciones]);
+  }, [alojamientos, habitaciones, reservas]);
+
+  // Gráfico de reservas por mes (datos reales)
+  const chartData = useMemo(() => {
+    const counts = new Array(12).fill(0);
+    reservas.forEach(r => {
+      if (r.fechaCheckIn) {
+        const m = new Date(r.fechaCheckIn).getMonth();
+        counts[m]++;
+      }
+    });
+    return MESES.map((mes, i) => ({ mes, reservas: counts[i] }));
+  }, [reservas]);
+
+  // Actividad reciente (últimas 4 reservas reales)
+  const actividadReciente = useMemo(() => {
+    return [...reservas]
+      .sort((a, b) => new Date(b.fechaCreacion || b.fechaCheckIn || 0) - new Date(a.fechaCreacion || a.fechaCheckIn || 0))
+      .slice(0, 4)
+      .map(r => ({
+        text: `Reserva ${r.codigo || '#' + r.reservaId} — ${r.nombreCliente || 'Cliente'}`,
+        time: r.estado || '',
+        type: (r.estado || '').toLowerCase() === 'confirmada' ? 'success' 
+            : (r.estado || '').toLowerCase() === 'pendiente' ? 'warning' 
+            : (r.estado || '').toLowerCase() === 'cancelada' ? 'danger' : 'primary',
+      }));
+  }, [reservas]);
 
   const loading = loadingAloj && stats.alojamientos === 0;
 
@@ -89,12 +117,10 @@ export default function AdminDashboard() {
         <div className="card card-static" style={{ padding: '1.5rem' }}>
           <h3 style={{ fontSize: '1rem', marginBottom: '1.25rem' }}>Actividad Reciente</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {[
-              { text: 'Nuevo alojamiento registrado', time: 'Hace 2 horas', type: 'success' },
-              { text: 'Habitación actualizada', time: 'Hace 5 horas', type: 'primary' },
-              { text: 'Reserva confirmada #1025', time: 'Ayer', type: 'warning' },
-              { text: 'Nuevo colaborador asignado', time: 'Hace 2 días', type: 'primary' },
-            ].map((item, i) => (
+            {(actividadReciente.length === 0
+            ? [{ text: 'Sin actividad reciente', time: '—', type: 'primary' }]
+            : actividadReciente
+            ).map((item, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.625rem 0', borderBottom: '1px solid var(--color-border)' }}>
                 <span className={`badge badge-${item.type}`} style={{ width: 8, height: 8, padding: 0, borderRadius: '50%', flexShrink: 0 }} />
                 <span style={{ flex: 1, fontSize: '0.8125rem' }}>{item.text}</span>
