@@ -23,11 +23,19 @@ export default function AdminDashboard() {
         const users = await usersRes.json();
         const validUsers = Array.isArray(users) ? users : [];
 
-        const promises = validUsers.map(u => 
-          fetch(`/api/reservas/cliente/${u.usuarioId || u.id}`)
-            .then(res => res.json())
-            .catch(() => [])
-        );
+        const promises = validUsers.map(u => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 segundos máximo
+          return fetch(`/api/reservas/cliente/${u.usuarioId || u.id}`, { signal: controller.signal })
+            .then(res => {
+              clearTimeout(timeoutId);
+              return res.json();
+            })
+            .catch(() => {
+              clearTimeout(timeoutId);
+              return [];
+            });
+        });
 
         const results = await Promise.allSettled(promises);
         let todas = [];
