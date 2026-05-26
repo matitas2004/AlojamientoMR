@@ -20,7 +20,7 @@ export default function ReservasPage() {
 
       const promises = validUsers.map(u => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos
         return fetch(`/api/reservas/cliente/${u.usuarioId || u.id}`, { signal: controller.signal })
           .then(res => {
             clearTimeout(timeoutId);

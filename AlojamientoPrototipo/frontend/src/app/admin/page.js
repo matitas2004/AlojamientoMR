@@ -25,7 +25,7 @@ export default function AdminDashboard() {
 
         const promises = validUsers.map(u => {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 segundos máximo
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos máximo
           return fetch(`/api/reservas/cliente/${u.usuarioId || u.id}`, { signal: controller.signal })
             .then(res => {
               clearTimeout(timeoutId);

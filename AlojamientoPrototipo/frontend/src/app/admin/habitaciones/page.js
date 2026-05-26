@@ -8,11 +8,14 @@ import useApi from '@/lib/useApi';
 const emptyHab = { alojamientoId: 0, nombre: '', descripcion: '', capacidadAdultos: 2, capacidadNinos: 0, numBanos: 1, numDormitorios: 1, tieneCocina: false, tieneAireAcondicionado: false, superficieM2: null, precioNoche: 0 };
 
 export default function HabitacionesPage() {
-  const { data: alojamientos } = useApi('/alojamientos');
+  const { data: alojamientosRaw } = useApi('/alojamientos');
+  const alojamientos = Array.isArray(alojamientosRaw) ? alojamientosRaw : [];
+  
   const [selectedId, setSelectedId] = useState('');
-  const { data: habitaciones, mutate: mutateHabs, isLoading: loading } = useApi(
+  const { data: habitacionesRaw, mutate: mutateHabs, isLoading: loading } = useApi(
     selectedId ? `/habitaciones/alojamiento/${selectedId}` : null
   );
+  const habitaciones = Array.isArray(habitacionesRaw) ? habitacionesRaw : [];
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyHab);
   const [saving, setSaving] = useState(false);
