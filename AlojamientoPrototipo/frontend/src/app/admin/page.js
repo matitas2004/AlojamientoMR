@@ -19,34 +19,16 @@ export default function AdminDashboard() {
     const fetchAllReservas = async () => {
       setLoadingReservas(true);
       try {
-        const usersRes = await fetch('/api/usuarios');
-        const users = await usersRes.json();
-        const validUsers = Array.isArray(users) ? users : [];
-
-        const promises = validUsers.map(u => {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos máximo
-          return fetch(`/api/reservas/cliente/${u.usuarioId || u.id}`, { signal: controller.signal })
-            .then(res => {
-              clearTimeout(timeoutId);
-              return res.json();
-            })
-            .catch(() => {
-              clearTimeout(timeoutId);
-              return [];
-            });
-        });
-
-        const results = await Promise.allSettled(promises);
-        let todas = [];
-        results.forEach(res => {
-          if (res.status === 'fulfilled' && Array.isArray(res.value)) {
-            todas = [...todas, ...res.value];
-          }
-        });
-        setReservas(todas);
+        const res = await fetch('/api/reservas');
+        if (res.ok) {
+          const todas = await res.json();
+          setReservas(Array.isArray(todas) ? todas : []);
+        } else {
+          setReservas([]);
+        }
       } catch (err) {
-        console.error("Client-Side Aggregation falló", err);
+        console.error("Fetch API falló", err);
+        setReservas([]);
       } finally {
         setLoadingReservas(false);
       }

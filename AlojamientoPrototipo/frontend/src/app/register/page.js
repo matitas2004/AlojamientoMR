@@ -35,6 +35,22 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 800));
+      
+      const existingUsers = JSON.parse(localStorage.getItem('mockUsers') || '[]');
+      if (existingUsers.some(u => u.email === form.email.toLowerCase())) {
+        setError('El correo electrónico ya está en uso');
+        return;
+      }
+      
+      const newUser = {
+        id: Date.now(),
+        nombreCompleto: form.nombreCompleto,
+        email: form.email.toLowerCase(),
+        rol: 'Administrador'
+      };
+      
+      localStorage.setItem('mockUsers', JSON.stringify([...existingUsers, newUser]));
+      
       toast.success('¡Cuenta creada exitosamente! Inicia sesión');
       router.push('/login');
     } catch (err) {

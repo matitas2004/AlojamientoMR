@@ -32,22 +32,25 @@ export default function LoginPage() {
     try {
       // Para el prototipo: login simulado basado en email
       // En producción se conectaría a la API de Usuarios
-      const mockUsers = {
-        'admin@alojamiento.com': { id: 1, nombreCompleto: 'Mathias Rivera', email: 'admin@alojamiento.com', rol: 'Administrador' },
-        'colaborador@alojamiento.com': { id: 2, nombreCompleto: 'Carlos López', email: 'colaborador@alojamiento.com', rol: 'Colaborador', socioId: 1 },
-      };
+      const defaultUsers = [
+        { id: 1, nombreCompleto: 'Mathias Rivera', email: 'admin@alojamiento.com', rol: 'Administrador' },
+        { id: 2, nombreCompleto: 'Carlos López', email: 'colaborador@alojamiento.com', rol: 'Colaborador', socioId: 1 }
+      ];
+
+      const localUsers = JSON.parse(localStorage.getItem('mockUsers') || '[]');
+      const allUsers = [...defaultUsers, ...localUsers];
 
       // Simular delay de red
       await new Promise(resolve => setTimeout(resolve, 800));
 
-      const user = mockUsers[form.email.toLowerCase()];
+      const user = allUsers.find(u => u.email === form.email.toLowerCase());
       if (user && form.password.length >= 3) {
         const fakeToken = btoa(JSON.stringify({ sub: user.id, email: user.email, rol: user.rol, exp: Date.now() + 86400000 }));
         login(fakeToken, user);
         toast.success(`¡Bienvenido, ${user.nombreCompleto}!`);
         router.push('/admin');
       } else {
-        setError('Credenciales inválidas. Intenta con admin@alojamiento.com o colaborador@alojamiento.com');
+        setError('Credenciales inválidas. Verifica tu correo y contraseña.');
       }
     } catch (err) {
       setError('Error al conectar con el servidor');
