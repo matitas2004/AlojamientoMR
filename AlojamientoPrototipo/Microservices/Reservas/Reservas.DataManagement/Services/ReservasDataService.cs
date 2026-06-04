@@ -12,6 +12,12 @@ public class ReservasDataService : IReservasDataService
 
     public ReservasDataService(IReservasRepository repo) => _repo = repo;
 
+    public async Task<IEnumerable<ReservaDataModel>> GetAllAsync()
+    {
+        var entities = await _repo.GetAllAsync();
+        return entities.Select(ReservasMapper.ToDataModel);
+    }
+
     public async Task<ReservaDataModel?> GetByIdAsync(int id)
     {
         var entity = await _repo.GetByIdAsync(id);

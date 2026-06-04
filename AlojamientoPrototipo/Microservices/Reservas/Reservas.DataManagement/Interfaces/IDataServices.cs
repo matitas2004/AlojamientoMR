@@ -4,6 +4,7 @@ namespace Reservas.DataManagement.Interfaces;
 
 public interface IReservasDataService
 {
+    Task<IEnumerable<ReservaDataModel>> GetAllAsync();
     Task<ReservaDataModel?> GetByIdAsync(int id);
     Task<IEnumerable<ReservaDataModel>> GetByClienteIdAsync(int clienteId);
     Task<ReservaDataModel> CreateAsync(ReservaDataModel model);

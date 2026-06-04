@@ -31,6 +31,12 @@ public class ReservasService : IReservasService
         _publishEndpoint = publishEndpoint;
     }
 
+    public async Task<IEnumerable<ReservaResponse>> GetAllAsync()
+    {
+        var dataModels = await _reservasDataService.GetAllAsync();
+        return dataModels.Select(ReservasBusinessMapper.ToResponse);
+    }
+
     public async Task<ReservaResponse> GetByIdAsync(int id)
     {
         var reserva = await _reservasDataService.GetByIdAsync(id);

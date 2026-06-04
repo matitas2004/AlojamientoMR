@@ -15,6 +15,9 @@ public interface IRepositoryBase<T> where T : class
     Task SaveChangesAsync();
 }
 
-public interface IReservasRepository : IRepositoryBase<ReservaEntity> { }
+public interface IReservasRepository : IRepositoryBase<ReservaEntity>
+{
+    Task<IEnumerable<ReservaEntity>> GetAllAsync();
+}
 public interface IDescuentosRepository : IRepositoryBase<DescuentoEntity> { }
 public interface IReservaDetallesRepository : IRepositoryBase<ReservaDetalleHabitacionEntity> { }

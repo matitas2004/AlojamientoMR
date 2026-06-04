@@ -4,6 +4,7 @@ namespace Reservas.Business.Interfaces;
 
 public interface IReservasService
 {
+    Task<IEnumerable<ReservaResponse>> GetAllAsync();
     Task<ReservaResponse> GetByIdAsync(int id);
     Task<IEnumerable<ReservaResponse>> GetByClienteIdAsync(int clienteId);
     Task<IEnumerable<ReservaResumenResponse>> GetResumenByClienteIdAsync(int clienteId);
