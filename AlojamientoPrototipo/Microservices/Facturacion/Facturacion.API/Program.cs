@@ -17,6 +17,8 @@ builder.Services.AddApplicationServices();
 // ── Event Bus (MassTransit + RabbitMQ) ───────────────
 builder.Services.AddMassTransit(x =>
 {
+    x.AddConsumer<Facturacion.API.Consumers.ReservaCreadaConsumer>();
+
     x.UsingRabbitMq((context, cfg) =>
     {
         // Se espera "amqps://user:pass@host/vhost" desde appsettings.json o variables de entorno

@@ -4,6 +4,8 @@ using Reservas.Business.Interfaces;
 using Reservas.Business.Mappers;
 using Reservas.DataManagement.Interfaces;
 using Reservas.DataManagement.Models;
+using MassTransit;
+using Shared.Kernel.Events;
 
 namespace Reservas.Business.Services;
 
@@ -13,17 +15,20 @@ public class ReservasService : IReservasService
     private readonly IDescuentosDataService _descuentosDataService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly Shared.Protos.CalendarioGrpc.CalendarioGrpcClient _calendarioGrpcClient;
+    private readonly IPublishEndpoint _publishEndpoint;
 
     public ReservasService(
         IReservasDataService reservasDataService,
         IDescuentosDataService descuentosDataService,
         IUnitOfWork unitOfWork,
-        Shared.Protos.CalendarioGrpc.CalendarioGrpcClient calendarioGrpcClient)
+        Shared.Protos.CalendarioGrpc.CalendarioGrpcClient calendarioGrpcClient,
+        IPublishEndpoint publishEndpoint)
     {
         _reservasDataService = reservasDataService;
         _descuentosDataService = descuentosDataService;
         _unitOfWork = unitOfWork;
         _calendarioGrpcClient = calendarioGrpcClient;
+        _publishEndpoint = publishEndpoint;
     }
 
     public async Task<ReservaResponse> GetByIdAsync(int id)
@@ -127,7 +132,19 @@ public class ReservasService : IReservasService
             var created = await _reservasDataService.CreateAsync(model);
             await _unitOfWork.CommitTransactionAsync();
             
-            // TODO: Publicar evento a RabbitMQ -> ReservaCreadaEvent
+            // Publicar evento a RabbitMQ
+            await _publishEndpoint.Publish(new ReservaCreadaEvent
+            {
+                ReservaId = created.ReservaId,
+                ClienteId = created.ClienteId,
+                MontoTotal = created.Total,
+                Detalles = created.DetallesHabitacion.Select(d => new DetalleHabitacionEventModel
+                {
+                    Descripcion = $"Habitación {d.HabitacionId} x {d.NumNoches} noches",
+                    Cantidad = 1,
+                    PrecioUnitario = d.SubTotalHabitacion
+                }).ToList()
+            });
 
             return await GetByIdAsync(created.ReservaId);
         }
