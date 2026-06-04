@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Reservas.DataManagement\Reservas.DataManagement.csproj" />
@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.Net.Client" Version="2.80.0" />
-    <PackageReference Include="MassTransit" Version="9.1.2" />
+    <PackageReference Include="MassTransit" Version="8.3.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
   </ItemGroup>
 
