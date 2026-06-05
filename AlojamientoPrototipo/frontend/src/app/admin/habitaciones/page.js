@@ -8,7 +8,7 @@ import useApi from '@/lib/useApi';
 const emptyHab = { alojamientoId: 0, nombre: '', descripcion: '', capacidadAdultos: 2, capacidadNinos: 0, numBanos: 1, numDormitorios: 1, tieneCocina: false, tieneAireAcondicionado: false, superficieM2: null, precioNoche: 0 };
 
 export default function HabitacionesPage() {
-  const { data: alojamientosRaw } = useApi('/alojamientos');
+  const { data: alojamientosRaw, isLoading: loadingAlojamientos } = useApi('/alojamientos');
   const alojamientos = Array.isArray(alojamientosRaw) ? alojamientosRaw : [];
   
   const [selectedId, setSelectedId] = useState('');
@@ -96,8 +96,8 @@ export default function HabitacionesPage() {
       <div className="card card-static" style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
         <div className="input-group">
           <label className="input-label">Selecciona un Alojamiento</label>
-          <select className="input-field" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-            <option value="">— Elige un alojamiento —</option>
+          <select className="input-field" value={selectedId} onChange={(e) => setSelectedId(e.target.value)} disabled={loadingAlojamientos}>
+            <option value="">{loadingAlojamientos ? "⏳ Cargando alojamientos..." : "— Elige un alojamiento —"}</option>
             {alojamientos.map(a => (
               <option key={a.alojamientoId} value={a.alojamientoId}>{a.nombre} ({a.ciudad || 'Sin ciudad'})</option>
             ))}

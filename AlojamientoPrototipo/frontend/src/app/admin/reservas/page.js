@@ -66,11 +66,15 @@ export default function ReservasPage() {
     }).format(d);
   };
 
-  const filtered = reservas.filter(r => 
-    r.codigo?.toLowerCase().includes(search.toLowerCase()) || 
-    r.nombreCliente?.toLowerCase().includes(search.toLowerCase()) ||
-    r.propiedadNombre?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = reservas.filter(r => {
+    const cod = r.codigoReserva || r.codigo || '';
+    const cli = r.nombreCliente || `Cliente #${r.clienteId}` || '';
+    const prop = r.propiedadNombre || `Alojamiento #${r.alojamientoId}` || '';
+    
+    return cod.toLowerCase().includes(search.toLowerCase()) || 
+           cli.toLowerCase().includes(search.toLowerCase()) ||
+           prop.toLowerCase().includes(search.toLowerCase());
+  });
 
   return (
     <div className="animate-fadeInUp">
@@ -110,10 +114,10 @@ export default function ReservasPage() {
               {filtered.map(r => (
                 <tr key={r.reservaId}>
                   <td>
-                    <div style={{ fontWeight: 700, color: 'var(--color-primary)', letterSpacing: '0.05em' }}>{r.codigo}</div>
-                    <div className="text-secondary text-sm">{r.nombreCliente}</div>
+                    <div style={{ fontWeight: 700, color: 'var(--color-primary)', letterSpacing: '0.05em' }}>{r.codigoReserva || r.codigo || `#${r.reservaId}`}</div>
+                    <div className="text-secondary text-sm">{r.nombreCliente || `Cliente #${r.clienteId}`}</div>
                   </td>
-                  <td style={{ fontWeight: 500 }}>{r.propiedadNombre}</td>
+                  <td style={{ fontWeight: 500 }}>{r.propiedadNombre || `Alojamiento #${r.alojamientoId}`}</td>
                   <td>
                     <div className="text-sm">
                       <strong>In:</strong> {formatDate(r.fechaCheckIn)}

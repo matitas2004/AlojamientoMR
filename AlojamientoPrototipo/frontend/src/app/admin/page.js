@@ -119,8 +119,8 @@ export default function AdminDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
         <div className="card card-static" style={{ padding: '1.5rem' }}>
           <h3 style={{ fontSize: '1rem', marginBottom: '1.25rem' }}>Reservas por Mes</h3>
-          <div style={{ height: 280, minWidth: 0, minHeight: 0 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+          <div style={{ width: '100%', minWidth: 0, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" aspect={1.8} minWidth={0} minHeight={0}>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="mes" tick={{ fill: '#64748b', fontSize: 12 }} />

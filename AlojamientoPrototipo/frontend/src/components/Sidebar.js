@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Building2, BedDouble, Users, CalendarDays, LogOut, Menu, X, ExternalLink } from 'lucide-react';
+import { LayoutDashboard, Building2, BedDouble, Users, CalendarDays, LogOut, Menu, X, ExternalLink, BarChart3 } from 'lucide-react';
 import useAuthStore from '@/store/useAuthStore';
 import styles from './Sidebar.module.css';
 
@@ -12,6 +12,7 @@ const navItems = [
   { href: '/admin/habitaciones', label: 'Habitaciones', icon: BedDouble },
   { href: '/admin/usuarios', label: 'Usuarios', icon: Users, adminOnly: true },
   { href: '/admin/reservas', label: 'Reservas', icon: CalendarDays },
+  { href: '/admin/reportes', label: 'Reportes', icon: BarChart3 },
 ];
 
 export default function Sidebar() {
