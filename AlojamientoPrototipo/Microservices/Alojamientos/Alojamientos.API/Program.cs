@@ -5,6 +5,9 @@ using Alojamientos.API.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Forzar compatibilidad de Entity Framework con Postgres en zonas horarias
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 // ── 1. Base de datos ─────────────────────────────────
 builder.Services.AddDbContext<AlojamientosDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("ConexionAlojamientos"))
