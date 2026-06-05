@@ -12,7 +12,7 @@ export default function HabitacionesPage() {
   const alojamientos = Array.isArray(alojamientosRaw) ? alojamientosRaw : [];
   
   const [selectedId, setSelectedId] = useState('');
-  const { data: habitacionesRaw, mutate: mutateHabs, isLoading: loading } = useApi(
+  const { data: habitacionesRaw, mutate: mutateHabs, isLoading: loading, error: errorHabs } = useApi(
     selectedId ? `/habitaciones/alojamiento/${selectedId}` : null
   );
   const habitaciones = Array.isArray(habitacionesRaw) ? habitacionesRaw : [];
@@ -114,6 +114,13 @@ export default function HabitacionesPage() {
       ) : loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 56 }} />)}
+        </div>
+      ) : errorHabs ? (
+        <div className="empty-state" style={{ borderColor: 'var(--color-danger)', backgroundColor: 'rgba(220, 38, 38, 0.05)' }}>
+          <BedDouble size={48} color="var(--color-danger)" />
+          <h3 style={{ color: 'var(--color-danger)' }}>Error de conexión</h3>
+          <p>El servidor está despertando o no se pudo cargar la información. Intenta de nuevo.</p>
+          <button className="btn btn-outline" style={{ marginTop: '1rem' }} onClick={() => mutateHabs()}>Reintentar</button>
         </div>
       ) : habitaciones.length === 0 ? (
         <div className="empty-state">

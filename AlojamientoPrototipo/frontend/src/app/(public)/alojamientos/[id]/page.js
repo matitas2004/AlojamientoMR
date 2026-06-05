@@ -208,7 +208,11 @@ export default function PropiedadDetallePage({ params }) {
       router.push('/mis-reservas');
     } catch (err) {
       console.error("API falló:", err);
-      toast.error('Error real al crear la reserva en la base de datos.');
+      if (err.response?.status >= 500 || err.code === 'ECONNABORTED') {
+        toast.error('El servidor estaba en reposo y está despertando. ¡Intenta de nuevo en unos segundos!', { duration: 6000 });
+      } else {
+        toast.error('Error al crear la reserva. Verifica los datos.');
+      }
     } finally {
       setBookingLoading(false);
     }

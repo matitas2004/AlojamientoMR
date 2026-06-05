@@ -1,5 +1,6 @@
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
+import WakeupPing from '@/components/WakeupPing';
 
 export const metadata = {
   title: 'Homiya - Panel de Gestión',
@@ -24,6 +25,7 @@ export default function RootLayout({ children }) {
             error: { iconTheme: { primary: '#dc2626', secondary: '#fff' } },
           }}
         />
+        <WakeupPing />
         {children}
       </body>
     </html>
