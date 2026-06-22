@@ -2,121 +2,117 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
-import api from '@/lib/api';
+import { Facturas } from '@/lib/api';
+
+const DARK = { bg: '#0F172A', surface: '#1E293B', border: '#334155', text: '#F1F5F9', textSecondary: '#94A3B8', primary: '#3B82F6', success: '#10B981' };
+const LIGHT = { bg: '#F8FAFC', surface: '#FFFFFF', border: '#E2E8F0', text: '#0F172A', textSecondary: '#64748B', primary: '#2563EB', success: '#059669' };
 
 export default function FacturaScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const { id, totalFallback, alojamientoNombre } = useLocalSearchParams();
+  const scheme = useColorScheme() ?? 'light';
+  const C = scheme === 'dark' ? DARK : LIGHT;
 
-  // Recibimos el ID de la reserva (que usamos para buscar la factura) y el totalFallback por si la DB devuelve 0
-  const { id: reservaIdStr, totalFallback } = useLocalSearchParams();
-  const reservaId = Number(reservaIdStr);
-  const fallbackAmount = Number(totalFallback) || 0;
+  const reservaId = Number(id);
+  const fallback = Number(totalFallback) || 0;
 
   const [loading, setLoading] = useState(true);
-  const [factura, setFactura] = useState<any>(null);
+  const [factura, setFactura] = useState(null);
 
   useEffect(() => {
-    const fetchFactura = async () => {
-      try {
-        const data = await api.getFacturaByReservaId(reservaId);
-        // data.value o data dependiendo de cómo devuelva la API
-        const fact = data?.value || data || null;
-        setFactura(fact);
-      } catch (err) {
-        console.warn('Factura no encontrada o error', err);
-        // Si no hay factura aún (por asincronía o error), generaremos un mock visual
-        setFactura({
-          facturaId: 'PROCESANDO',
-          fechaEmision: new Date().toISOString(),
-          monto: fallbackAmount,
-          estado: 'Emitida',
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchFactura();
+    Facturas.getByReserva(reservaId)
+      .then(res => {
+        const d = res.data?.value ?? res.data;
+        if (Array.isArray(d)) {
+          setFactura(d.length > 0 ? d[0] : null);
+        } else {
+          setFactura(d);
+        }
+      })
+      .catch(() => {
+        // Usamos mock con el total calculado localmente
+        setFactura({ facturaId: null, monto: fallback, estado: 'Emitida', fechaEmision: new Date().toISOString() });
+      })
+      .finally(() => setLoading(false));
   }, [reservaId]);
 
   if (loading) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ color: colors.textSecondary, marginTop: 12 }}>Generando comprobante...</Text>
+      <View style={[styles.center, { backgroundColor: C.bg }]}>
+        <ActivityIndicator size="large" color={C.primary} />
+        <Text style={[styles.loadingText, { color: C.textSecondary }]}>Generando recibo...</Text>
       </View>
     );
   }
 
-  // Solución al Bug 9.2: Factura con monto 0
-  const montoAMostrar = (factura?.monto && factura.monto > 0) ? factura.monto : fallbackAmount;
+  // Fallback: si el monto de la BD es 0, usar el calculado en checkout
+  const monto = (factura?.monto && factura.monto > 0) ? factura.monto : fallback;
+  const fecha = factura?.fechaEmision?.split('T')[0] ?? new Date().toISOString().split('T')[0];
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface }]}>
-        <TouchableOpacity style={styles.closeBtn} onPress={() => router.replace('/(tabs)/reservas')}>
-          <Ionicons name="close" size={28} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Recibo de Pago</Text>
-      </View>
+    <View style={[styles.container, { backgroundColor: C.bg }]}>
+      <TouchableOpacity style={[styles.closeBtn, { backgroundColor: C.surface }]} onPress={() => router.replace('/(tabs)/reservas' as any)}>
+        <Ionicons name="close" size={22} color={C.text} />
+      </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.successIconContainer}>
-          <Ionicons name="checkmark-circle" size={80} color={colors.success} />
-          <Text style={[styles.successText, { color: colors.text }]}>¡Pago Completado!</Text>
-          <Text style={[styles.successSubtext, { color: colors.textSecondary }]}>
-            Tu reserva ha sido confirmada y procesada.
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Success Icon */}
+        <View style={styles.successArea}>
+          <View style={[styles.successCircle, { backgroundColor: `${C.success}18` }]}>
+            <Ionicons name="checkmark-circle" size={72} color={C.success} />
+          </View>
+          <Text style={[styles.successTitle, { color: C.text }]}>¡Pago Exitoso!</Text>
+          <Text style={[styles.successSub, { color: C.textSecondary }]}>
+            Tu reserva en {alojamientoNombre || 'el alojamiento'} ha sido confirmada.
           </Text>
         </View>
 
-        <View style={[styles.receiptCard, { backgroundColor: colors.surface }]}>
+        {/* Recibo */}
+        <View style={[styles.receipt, { backgroundColor: C.surface, borderColor: C.border }]}>
+          {/* Header */}
           <View style={styles.receiptHeader}>
-            <Text style={[styles.receiptBrand, { color: colors.primaryDark }]}>AlojamientoMR</Text>
-            <Text style={[styles.receiptDate, { color: colors.textSecondary }]}>
-              {factura?.fechaEmision?.split('T')[0] || new Date().toISOString().split('T')[0]}
-            </Text>
+            <Text style={[styles.brand, { color: C.primary }]}>AlojamientoMR</Text>
+            <Text style={[styles.receiptDate, { color: C.textSecondary }]}>{fecha}</Text>
           </View>
 
-          <View style={[styles.dashedDivider, { borderColor: colors.border }]} />
+          <View style={[styles.dashed, { borderColor: C.border }]} />
+
+          {[
+            { label: 'N° Factura', value: factura?.facturaId ? `FAC-${factura.facturaId}` : 'PROCESANDO' },
+            { label: 'N° Reserva', value: `RES-${reservaId}` },
+            { label: 'Estado', value: factura?.estado ?? 'Pagado', success: true },
+          ].map(row => (
+            <View key={row.label} style={styles.receiptRow}>
+              <Text style={[styles.receiptLabel, { color: C.textSecondary }]}>{row.label}</Text>
+              <Text style={[styles.receiptValue, { color: row.success ? C.success : C.text }]}>
+                {row.value}
+              </Text>
+            </View>
+          ))}
+
+          <View style={[styles.dashed, { borderColor: C.border }]} />
 
           <View style={styles.receiptRow}>
-            <Text style={[styles.receiptLabel, { color: colors.textSecondary }]}>Nº Factura</Text>
-            <Text style={[styles.receiptValue, { color: colors.text }]}>
-              FAC-{factura?.facturaId || 'PENDIENTE'}
-            </Text>
-          </View>
-
-          <View style={styles.receiptRow}>
-            <Text style={[styles.receiptLabel, { color: colors.textSecondary }]}>Nº Reserva</Text>
-            <Text style={[styles.receiptValue, { color: colors.text }]}>RES-{reservaId}</Text>
-          </View>
-
-          <View style={styles.receiptRow}>
-            <Text style={[styles.receiptLabel, { color: colors.textSecondary }]}>Estado</Text>
-            <Text style={[styles.receiptValue, { color: colors.success }]}>
-              {factura?.estado || 'Pagado'}
-            </Text>
-          </View>
-
-          <View style={[styles.dashedDivider, { borderColor: colors.border }]} />
-
-          <View style={styles.receiptRow}>
-            <Text style={[styles.receiptTotalLabel, { color: colors.text }]}>Total Pagado</Text>
-            <Text style={[styles.receiptTotalValue, { color: colors.primary }]}>
-              ${montoAMostrar.toFixed(2)}
-            </Text>
+            <Text style={[styles.totalLabel, { color: C.text }]}>Total Pagado</Text>
+            <Text style={[styles.totalValue, { color: C.primary }]}>${monto.toFixed(2)}</Text>
           </View>
         </View>
 
-        <TouchableOpacity 
-          style={[styles.btn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          onPress={() => router.replace('/(tabs)/reservas')}
+        {/* Acciones */}
+        <TouchableOpacity
+          style={[styles.btn, { backgroundColor: C.primary }]}
+          onPress={() => router.replace('/(tabs)/reservas' as any)}
         >
-          <Text style={[styles.btnText, { color: colors.text }]}>Ver mis reservas</Text>
+          <Ionicons name="calendar-outline" size={18} color="#fff" />
+          <Text style={styles.btnText}>Ver mis reservas</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.btnOutline, { borderColor: C.border }]}
+          onPress={() => router.replace('/' as any)}
+        >
+          <Text style={[styles.btnOutlineText, { color: C.text }]}>Explorar más alojamientos</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -125,24 +121,26 @@ export default function FacturaScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { alignItems: 'center', paddingTop: 60, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
-  closeBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 8 },
-  headerTitle: { fontSize: 18, fontWeight: '700' },
-  content: { padding: 24, alignItems: 'center' },
-  successIconContainer: { alignItems: 'center', marginBottom: 32 },
-  successText: { fontSize: 24, fontWeight: '800', marginTop: 12, marginBottom: 8 },
-  successSubtext: { fontSize: 15, textAlign: 'center', paddingHorizontal: 32 },
-  receiptCard: { width: '100%', borderRadius: 16, padding: 24, marginBottom: 32, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
-  receiptHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  receiptBrand: { fontSize: 18, fontWeight: '800' },
-  receiptDate: { fontSize: 14 },
-  dashedDivider: { borderWidth: 1, borderStyle: 'dashed', marginVertical: 16 },
-  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  receiptLabel: { fontSize: 15 },
-  receiptValue: { fontSize: 15, fontWeight: '600' },
-  receiptTotalLabel: { fontSize: 18, fontWeight: '700' },
-  receiptTotalValue: { fontSize: 24, fontWeight: '800' },
-  btn: { width: '100%', paddingVertical: 16, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
-  btnText: { fontSize: 16, fontWeight: '700' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
+  loadingText: { fontSize: 15 },
+  closeBtn: { position: 'absolute', top: 52, right: 20, zIndex: 10, width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 },
+  scroll: { padding: 24, paddingTop: 80, gap: 16 },
+  successArea: { alignItems: 'center', gap: 10, marginBottom: 8 },
+  successCircle: { width: 120, height: 120, borderRadius: 60, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  successTitle: { fontSize: 26, fontWeight: '800' },
+  successSub: { fontSize: 15, textAlign: 'center', paddingHorizontal: 20 },
+  receipt: { borderRadius: 16, borderWidth: 1, padding: 20, gap: 12 },
+  receiptHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  brand: { fontSize: 18, fontWeight: '800' },
+  receiptDate: { fontSize: 13 },
+  dashed: { borderWidth: 1, borderStyle: 'dashed', marginVertical: 4 },
+  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  receiptLabel: { fontSize: 14 },
+  receiptValue: { fontSize: 14, fontWeight: '600' },
+  totalLabel: { fontSize: 17, fontWeight: '700' },
+  totalValue: { fontSize: 26, fontWeight: '800' },
+  btn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, paddingVertical: 16, borderRadius: 14 },
+  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  btnOutline: { paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, alignItems: 'center' },
+  btnOutlineText: { fontSize: 15, fontWeight: '600' },
 });

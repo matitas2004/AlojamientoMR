@@ -1,84 +1,127 @@
 import axios from 'axios';
+import axiosRetry from 'axios-retry';
 
-// ══════════════════════════════════════════════════════════════
-// API Client — Conexión directa a las APIs de Render
-// La app móvil NO usa proxy (BFF). Llama directamente a Render.
-// ══════════════════════════════════════════════════════════════
-
+// ─── URLs de los Microservicios en Render ───────────────────────────────────
 const BASE_ALOJAMIENTOS = 'https://alojamientosmr-api.onrender.com/api/v1';
 const BASE_RESERVAS     = 'https://reservasmr-api.onrender.com/api/v1';
 const BASE_USUARIOS     = 'https://usuariosmr-api.onrender.com/api/v1';
 const BASE_FACTURACION  = 'https://facturacionmr-api.onrender.com/api/v1';
 
-// ── Instancia para Alojamientos ──
+// ─── Instancias de Axios para cada Microservicio ─────────────────────────────
 export const alojamientosApi = axios.create({
   baseURL: BASE_ALOJAMIENTOS,
-  timeout: 30000,
+  timeout: 90000,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ── Instancia para Reservas ──
 export const reservasApi = axios.create({
   baseURL: BASE_RESERVAS,
-  timeout: 30000,
+  timeout: 90000,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ── Instancia para Usuarios / Auth ──
 export const usuariosApi = axios.create({
   baseURL: BASE_USUARIOS,
-  timeout: 30000,
+  timeout: 90000,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ── Instancia para Facturación ──
 export const facturacionApi = axios.create({
   baseURL: BASE_FACTURACION,
-  timeout: 30000,
+  timeout: 90000,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ── Retry con backoff exponencial (resiliencia) ──
-const withRetry = async <T>(fn: () => Promise<T>, retries = 3): Promise<T> => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      const status = err?.response?.status;
-      if (i === retries - 1) throw err;
-      if (status && status < 500) throw err; // No reintentar errores del cliente
-      await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+// ─── Sincronizar Token de Autorización ──────────────────────────────────────
+export function setAuthToken(token: string | null) {
+  const apis = [alojamientosApi, reservasApi, usuariosApi, facturacionApi];
+  apis.forEach(apiInstance => {
+    if (token) {
+      apiInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } else {
+      delete apiInstance.defaults.headers.common['Authorization'];
     }
-  }
-  throw new Error('Max retries reached');
+  });
+}
+
+// ─── Configurar Retry para cada Instancia ────────────────────────────────────
+const setupRetry = (apiInstance: any) => {
+  axiosRetry(apiInstance, {
+    retries: 4,
+    retryDelay: (retryCount) => {
+      return retryCount * 3000; // 3s, 6s, 9s, 12s
+    },
+    retryCondition: (error) => {
+      // Reintentar si es error de red (e.g. timeout) o status 500+
+      return axiosRetry.isNetworkOrIdempotentRequestError(error) || 
+             (error.response && error.response.status >= 500);
+    }
+  });
 };
 
-// ── API de alto nivel con resiliencia incorporada ──
-export const api = {
-  // Alojamientos
-  getAlojamientos: () => withRetry(() => alojamientosApi.get('/alojamientos').then(r => r.data?.value || r.data || [])),
-  getAlojamiento: (id: number) => withRetry(() => alojamientosApi.get(`/alojamientos/${id}`).then(r => r.data)),
-  getHabitaciones: (alojamientoId: number) => withRetry(() => alojamientosApi.get(`/habitaciones/alojamiento/${alojamientoId}`).then(r => r.data?.value || r.data || [])),
+[alojamientosApi, reservasApi, usuariosApi, facturacionApi].forEach(setupRetry);
 
-  // Reservas
-  getReservas: () => withRetry(() => reservasApi.get('/Reservas').then(r => r.data?.value || r.data || [])),
-  getReservasByCliente: (clienteId: number) => withRetry(() => reservasApi.get(`/Reservas/cliente/${clienteId}`).then(r => r.data?.value || r.data || [])),
-  crearReserva: (body: any) => withRetry(() => reservasApi.post('/Reservas', body).then(r => r.data)),
-
-  // Auth
-  login: (email: string, password: string) => usuariosApi.post('/auth/login', { email, password }).then(r => r.data),
-  register: (body: any) => usuariosApi.post('/clientes/registrar', body).then(r => r.data), // Ajustar al endpoint real si existe
-
-  // Facturación
-  getFacturaByReservaId: (reservaId: number) => withRetry(() => facturacionApi.get(`/Facturas/reserva/${reservaId}`).then(r => r.data)),
-  crearFactura: (body: any) => withRetry(() => facturacionApi.post('/Facturas', body).then(r => r.data)),
-
-  // Wakeup (despertar todos los servicios en paralelo)
-  wakeup: () => Promise.allSettled([
-    alojamientosApi.get('/alojamientos').catch(() => null),
-    reservasApi.get('/Reservas').catch(() => null),
-    usuariosApi.get('/usuarios').catch(() => null),
-  ]),
+// ─── Interceptor de Errores Global (Cold Start / Caídas) ─────────────────────
+const setupInterceptors = (apiInstance: any) => {
+  apiInstance.interceptors.response.use(
+    (res: any) => res,
+    (err: any) => {
+      const status = err?.response?.status;
+      if (!status) {
+        err.friendlyMessage = 'Sin conexión al servidor. Si es la primera vez en minutos, los servidores de Render están despertando del modo reposo (toma ~50 segundos).';
+      } else if (status === 401) {
+        err.friendlyMessage = 'Sesión expirada o credenciales incorrectas. Por favor inicia sesión de nuevo.';
+      } else if (status >= 500) {
+        err.friendlyMessage = 'El servidor de Render está iniciando, intenta en unos segundos.';
+      }
+      return Promise.reject(err);
+    }
+  );
 };
 
-export default api;
+[alojamientosApi, reservasApi, usuariosApi, facturacionApi].forEach(setupInterceptors);
+
+// ─── Endpoints de Alto Nivel para las Pantallas ─────────────────────────────
+// Retornamos el Axios Promise completo para que coincida con lo que las pantallas esperan (.data)
+export const Auth = {
+  login: (email, password) =>
+    usuariosApi.post('/auth/login', { email, password }),
+
+  register: (data) =>
+    usuariosApi.post('/clientes/registrar', data),
+};
+
+export const Alojamientos = {
+  getAll: () =>
+    alojamientosApi.get('/alojamientos'),
+
+  getById: (id) =>
+    alojamientosApi.get(`/alojamientos/${id}`),
+
+  getHabitaciones: (alojamientoId) =>
+    alojamientosApi.get(`/habitaciones/alojamiento/${alojamientoId}`),
+};
+
+export const Reservas = {
+  getMisReservas: (clienteId) =>
+    reservasApi.get(`/Reservas/cliente/${clienteId}`),
+
+  crear: (data) =>
+    reservasApi.post('/Reservas', data),
+};
+
+export const Facturas = {
+  getByReserva: (reservaId) =>
+    facturacionApi.get(`/Facturas/reserva/${reservaId}`),
+
+  crear: (data) =>
+    facturacionApi.post('/Facturas', data),
+};
+
+export default {
+  Auth,
+  Alojamientos,
+  Reservas,
+  Facturas,
+  setAuthToken,
+};

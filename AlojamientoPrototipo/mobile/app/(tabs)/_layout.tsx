@@ -1,38 +1,39 @@
-import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 
+const COLORS = {
+  light: { active: '#2563EB', bg: '#FFFFFF', border: '#E2E8F0', text: '#64748B' },
+  dark:  { active: '#60A5FA', bg: '#0F172A', border: '#1E293B', text: '#94A3B8' },
+};
+
 export default function TabLayout() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const scheme = useColorScheme() ?? 'light';
+  const c = COLORS[scheme];
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.tabIconDefault,
+        headerShown: false,
+        tabBarActiveTintColor: c.active,
+        tabBarInactiveTintColor: c.text,
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
+          backgroundColor: c.bg,
+          borderTopColor: c.border,
+          borderTopWidth: 1,
+          height: 62,
           paddingBottom: 8,
-          paddingTop: 4,
-          height: 60,
+          paddingTop: 6,
         },
-        headerStyle: {
-          backgroundColor: colors.surface,
-        },
-        headerTintColor: colors.text,
-        headerShadowVisible: false,
-      }}>
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Explorar',
-          headerTitle: 'AlojamientoMR',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search" size={size} color={color} />
+            <Ionicons name="search-outline" size={size} color={color} />
           ),
         }}
       />
@@ -41,7 +42,7 @@ export default function TabLayout() {
         options={{
           title: 'Mis Reservas',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar" size={size} color={color} />
+            <Ionicons name="calendar-outline" size={size} color={color} />
           ),
         }}
       />
@@ -50,7 +51,7 @@ export default function TabLayout() {
         options={{
           title: 'Perfil',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+            <Ionicons name="person-outline" size={size} color={color} />
           ),
         }}
       />

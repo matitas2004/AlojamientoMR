@@ -1,183 +1,207 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import {
+  View, Text, ScrollView, TouchableOpacity, Image,
+  StyleSheet, ActivityIndicator, Alert,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useAuth } from '@/lib/AuthContext';
-import api from '@/lib/api';
+import { Alojamientos } from '@/lib/api';
 
-export default function AlojamientoDetalleScreen() {
+const DARK = { bg: '#0F172A', surface: '#1E293B', border: '#334155', text: '#F1F5F9', textSecondary: '#94A3B8', primary: '#3B82F6' };
+const LIGHT = { bg: '#F8FAFC', surface: '#FFFFFF', border: '#E2E8F0', text: '#0F172A', textSecondary: '#64748B', primary: '#2563EB' };
+const PLACEHOLDER = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80';
+
+function Amenity({ icon, label, C }) {
+  return (
+    <View style={[styles.amenity, { backgroundColor: C.surface, borderColor: C.border }]}>
+      <Ionicons name={icon} size={20} color={C.primary} />
+      <Text style={[styles.amenityText, { color: C.text }]}>{label}</Text>
+    </View>
+  );
+}
+
+export default function AlojamientoScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const { isAuthenticated, user } = useAuth();
+  const scheme = useColorScheme() ?? 'light';
+  const C = scheme === 'dark' ? DARK : LIGHT;
+  const { isAuthenticated } = useAuth();
 
-  const [alojamiento, setAlojamiento] = useState<any>(null);
-  const [habitaciones, setHabitaciones] = useState<any[]>([]);
+  const [alojamiento, setAlojamiento] = useState(null);
+  const [habitaciones, setHabitaciones] = useState([]);
+  const [selectedHab, setSelectedHab] = useState(null);
   const [loading, setLoading] = useState(true);
-  
-  // Selección para reserva rápida (simplificada para móvil)
-  const [selectedHabitacion, setSelectedHabitacion] = useState<number | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [alojRes, habRes] = await Promise.all([
-          api.getAlojamiento(Number(id)),
-          api.getHabitaciones(Number(id)),
-        ]);
-        setAlojamiento(alojRes);
-        setHabitaciones(Array.isArray(habRes) ? habRes : []);
-        if (Array.isArray(habRes) && habRes.length > 0) {
-          setSelectedHabitacion(habRes[0].habitacionId);
-        }
-      } catch (err) {
-        Alert.alert('Error', 'No se pudo cargar la información.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+  const fetchData = useCallback(async () => {
+    try {
+      const [alojRes, habRes] = await Promise.all([
+        Alojamientos.getById(id),
+        Alojamientos.getHabitaciones(id),
+      ]);
+      const aloj = alojRes.data?.value ?? alojRes.data;
+      const habs = habRes.data?.value ?? habRes.data ?? [];
+      setAlojamiento(aloj);
+      setHabitaciones(Array.isArray(habs) ? habs : []);
+      if (habs.length > 0) setSelectedHab(habs[0]);
+    } catch (err) {
+      Alert.alert('Error', 'No se pudo cargar el alojamiento.');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
-  const handleReserva = () => {
-    if (!isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-    if (!selectedHabitacion) {
-      Alert.alert('Error', 'Selecciona una habitación');
-      return;
-    }
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-    const selectedRoomData = habitaciones.find(h => h.habitacionId === selectedHabitacion);
-    
-    // Redirigir a checkout pasando datos por query params
+  const handleReservar = () => {
+    if (!isAuthenticated) {
+      router.push('/login' as any);
+      return;
+    }
+    if (!selectedHab) {
+      Alert.alert('Selecciona una habitación', 'Por favor elige una habitación antes de continuar.');
+      return;
+    }
     router.push({
       pathname: `/checkout/${id}`,
       params: {
-        habitacionId: selectedRoomData.habitacionId,
-        precioNoche: selectedRoomData.precioNoche || 0,
-        noches: 2, // Hardcodeado para el flujo demo
-        alojamientoNombre: alojamiento.nombre
-      }
+        habitacionId: selectedHab.habitacionId,
+        precioNoche: selectedHab.precioNoche ?? 0,
+        noches: 2,
+        alojamientoNombre: alojamiento?.nombre ?? '',
+      },
     } as any);
   };
 
   if (loading) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.center, { backgroundColor: C.bg }]}>
+        <ActivityIndicator size="large" color={C.primary} />
       </View>
     );
   }
 
-  if (!alojamiento) return null;
-
-  const precioMinimo = habitaciones.length > 0 
-    ? Math.min(...habitaciones.map(h => h.precioNoche || Infinity)) 
-    : 0;
+  if (!alojamiento) {
+    return (
+      <View style={[styles.center, { backgroundColor: C.bg }]}>
+        <Ionicons name="alert-circle-outline" size={52} color={C.textSecondary} />
+        <Text style={[styles.errorText, { color: C.textSecondary }]}>No se encontró el alojamiento</Text>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={[styles.link, { color: C.primary }]}>Volver</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-        {/* Header con Imagen */}
+    <View style={[styles.container, { backgroundColor: C.bg }]}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Image */}
         <View style={styles.imageContainer}>
-          <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1542314831-c6a4d1409e1f?q=80&w=1000&auto=format&fit=crop' }} 
-            style={styles.image} 
+          <Image
+            source={{ uri: alojamiento.imagenUrl || PLACEHOLDER }}
+            style={styles.image}
+            defaultSource={{ uri: PLACEHOLDER }}
           />
-          <View style={styles.overlay} />
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <View style={[styles.circleBtn, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-              <Ionicons name="chevron-back" size={24} color="#fff" />
+            <View style={[styles.circleBtn, { backgroundColor: C.surface }]}>
+              <Ionicons name="arrow-back" size={20} color={C.text} />
             </View>
           </TouchableOpacity>
         </View>
 
-        {/* Info */}
-        <View style={[styles.content, { backgroundColor: colors.surface }]}>
-          <View style={styles.titleRow}>
-            <Text style={[styles.title, { color: colors.text }]}>{alojamiento.nombre}</Text>
-            <View style={styles.ratingBadge}>
-              <Ionicons name="star" size={14} color="#fbbf24" />
-              <Text style={styles.ratingText}>4.9</Text>
+        {/* Body */}
+        <View style={[styles.body, { backgroundColor: C.bg }]}>
+          <Text style={[styles.name, { color: C.text }]}>{alojamiento.nombre}</Text>
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={16} color={C.textSecondary} />
+            <Text style={[styles.location, { color: C.textSecondary }]}>
+              {alojamiento.ciudad || 'Ecuador'} · {alojamiento.direccion || ''}
+            </Text>
+          </View>
+
+          {/* Amenities */}
+          {(alojamiento.admiteMascotas || alojamiento.tienePiscina || alojamiento.tieneParqueadero) && (
+            <View style={styles.amenities}>
+              {alojamiento.admiteMascotas && <Amenity icon="paw" label="Mascotas" C={C} />}
+              {alojamiento.tienePiscina && <Amenity icon="water" label="Piscina" C={C} />}
+              {alojamiento.tieneParqueadero && <Amenity icon="car" label="Parqueadero" C={C} />}
             </View>
-          </View>
-          <Text style={[styles.location, { color: colors.primary }]}>
-            <Ionicons name="location" size={14} /> {alojamiento.ciudad} - {alojamiento.direccion}
-          </Text>
-          
-          <View style={styles.divider} />
+          )}
 
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Acerca del lugar</Text>
-          <Text style={[styles.description, { color: colors.textSecondary }]}>
-            {alojamiento.descripcion || 'Una hermosa propiedad lista para brindarte la mejor experiencia.'}
-          </Text>
+          {/* Descripción */}
+          {alojamiento.descripcion && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: C.text }]}>Descripción</Text>
+              <Text style={[styles.description, { color: C.textSecondary }]}>{alojamiento.descripcion}</Text>
+            </View>
+          )}
 
-          {/* Amenidades */}
-          <View style={styles.amenities}>
-            {alojamiento.tienePiscina && (
-              <View style={[styles.amenityBadge, { backgroundColor: colors.background }]}>
-                <Ionicons name="water" size={18} color={colors.primary} />
-                <Text style={[styles.amenityText, { color: colors.text }]}>Piscina</Text>
+          {/* Habitaciones */}
+          {habitaciones.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: C.text }]}>Selecciona una Habitación</Text>
+              <View style={styles.habList}>
+                {habitaciones.map(h => {
+                  const selected = selectedHab?.habitacionId === h.habitacionId;
+                  return (
+                    <TouchableOpacity
+                      key={h.habitacionId}
+                      style={[
+                        styles.habCard,
+                        { borderColor: selected ? C.primary : C.border, backgroundColor: C.surface },
+                        selected && { borderWidth: 2 },
+                      ]}
+                      onPress={() => setSelectedHab(h)}
+                    >
+                      <View style={styles.habHeader}>
+                        <Text style={[styles.habName, { color: C.text }]} numberOfLines={1}>{h.nombre}</Text>
+                        {selected && <Ionicons name="checkmark-circle" size={18} color={C.primary} />}
+                      </View>
+                      <View style={styles.habDetails}>
+                        <View style={styles.habDetail}>
+                          <Ionicons name="people-outline" size={13} color={C.textSecondary} />
+                          <Text style={[styles.habDetailText, { color: C.textSecondary }]}>{h.capacidadAdultos} adultos</Text>
+                        </View>
+                        {h.numBanos > 0 && (
+                          <View style={styles.habDetail}>
+                            <Ionicons name="water-outline" size={13} color={C.textSecondary} />
+                            <Text style={[styles.habDetailText, { color: C.textSecondary }]}>{h.numBanos} baño(s)</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[styles.habPrice, { color: C.primary }]}>
+                        ${(h.precioNoche ?? 0).toFixed(2)} <Text style={[styles.habPriceSub, { color: C.textSecondary }]}>/noche</Text>
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-            )}
-            {alojamiento.tieneParqueadero && (
-              <View style={[styles.amenityBadge, { backgroundColor: colors.background }]}>
-                <Ionicons name="car" size={18} color={colors.primary} />
-                <Text style={[styles.amenityText, { color: colors.text }]}>Parqueo</Text>
-              </View>
-            )}
-            {alojamiento.admiteMascotas && (
-              <View style={[styles.amenityBadge, { backgroundColor: colors.background }]}>
-                <Ionicons name="paw" size={18} color={colors.primary} />
-                <Text style={[styles.amenityText, { color: colors.text }]}>Mascotas</Text>
-              </View>
-            )}
-          </View>
+            </View>
+          )}
 
-          <View style={styles.divider} />
-
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Habitaciones Disponibles</Text>
-          {habitaciones.map(h => (
-            <TouchableOpacity 
-              key={h.habitacionId} 
-              style={[
-                styles.roomCard, 
-                { backgroundColor: colors.background, borderColor: selectedHabitacion === h.habitacionId ? colors.primary : colors.border },
-                selectedHabitacion === h.habitacionId && { borderWidth: 2 }
-              ]}
-              onPress={() => setSelectedHabitacion(h.habitacionId)}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.roomTitle, { color: colors.text }]}>{h.nombre}</Text>
-                <Text style={[styles.roomSubtitle, { color: colors.textSecondary }]}>
-                  {h.capacidadAdultos} Adul. • {h.numDormitorios} Dorm.
-                </Text>
-              </View>
-              <Text style={[styles.roomPrice, { color: colors.primaryDark }]}>${h.precioNoche?.toFixed(2)}</Text>
-            </TouchableOpacity>
-          ))}
-          <View style={{ height: 100 }} />
+          <View style={{ height: 120 }} />
         </View>
       </ScrollView>
 
-      {/* Floating Bottom Bar */}
-      <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-        <View>
-          <Text style={[styles.bottomPrice, { color: colors.text }]}>
-            ${precioMinimo === Infinity ? '0.00' : precioMinimo.toFixed(2)}
-          </Text>
-          <Text style={[styles.bottomLabel, { color: colors.textSecondary }]}>precio base / noche</Text>
-        </View>
-        <TouchableOpacity 
-          style={[styles.bookBtn, { backgroundColor: colors.primary }]}
-          onPress={handleReserva}
+      {/* CTA Bottom */}
+      <View style={[styles.bottomBar, { backgroundColor: C.surface, borderTopColor: C.border }]}>
+        {selectedHab && (
+          <View>
+            <Text style={[styles.priceLabel, { color: C.textSecondary }]}>Desde</Text>
+            <Text style={[styles.priceValue, { color: C.text }]}>
+              ${(selectedHab.precioNoche ?? 0).toFixed(2)}/noche
+            </Text>
+          </View>
+        )}
+        <TouchableOpacity
+          style={[styles.ctaBtn, { backgroundColor: C.primary }]}
+          onPress={handleReservar}
         >
-          <Text style={styles.bookBtnText}>Reservar Ahora</Text>
+          <Text style={styles.ctaText}>
+            {isAuthenticated ? 'Reservar Ahora' : 'Iniciar Sesión para Reservar'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -186,31 +210,40 @@ export default function AlojamientoDetalleScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  imageContainer: { width: '100%', height: 350, position: 'relative' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
+  errorText: { fontSize: 16, textAlign: 'center' },
+  link: { fontSize: 15, fontWeight: '700' },
+  imageContainer: { height: 300, position: 'relative' },
   image: { width: '100%', height: '100%' },
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.2)' },
-  backBtn: { position: 'absolute', top: 50, left: 20, zIndex: 10 },
-  circleBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  content: { flex: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: -24, padding: 24 },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  title: { fontSize: 24, fontWeight: '800', flex: 1, marginRight: 16 },
-  ratingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  ratingText: { marginLeft: 4, fontWeight: '700', color: '#b45309' },
-  location: { fontSize: 14, fontWeight: '600', marginTop: 8 },
-  divider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 24 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
-  description: { fontSize: 15, lineHeight: 24 },
-  amenities: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 16 },
-  amenityBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 8 },
-  amenityText: { fontSize: 14, fontWeight: '500' },
-  roomCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1 },
-  roomTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
-  roomSubtitle: { fontSize: 13 },
-  roomPrice: { fontSize: 18, fontWeight: '800' },
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingVertical: 16, paddingBottom: 32, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1 },
-  bottomPrice: { fontSize: 22, fontWeight: '800' },
-  bottomLabel: { fontSize: 12 },
-  bookBtn: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 12 },
-  bookBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  backBtn: { position: 'absolute', top: 50, left: 16, zIndex: 10 },
+  circleBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4, elevation: 4 },
+  body: { borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: -24, padding: 24, gap: 4 },
+  name: { fontSize: 24, fontWeight: '800', marginBottom: 6 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16 },
+  location: { fontSize: 14, flex: 1 },
+  amenities: { flexDirection: 'row', gap: 10, marginBottom: 20, flexWrap: 'wrap' },
+  amenity: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+  amenityText: { fontSize: 13, fontWeight: '600' },
+  section: { marginBottom: 20 },
+  sectionTitle: { fontSize: 17, fontWeight: '700', marginBottom: 12 },
+  description: { fontSize: 14, lineHeight: 22 },
+  habList: { gap: 10 },
+  habCard: { borderWidth: 1, borderRadius: 12, padding: 14 },
+  habHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  habName: { fontSize: 15, fontWeight: '600', flex: 1 },
+  habDetails: { flexDirection: 'row', gap: 12, marginBottom: 8 },
+  habDetail: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  habDetailText: { fontSize: 12 },
+  habPrice: { fontSize: 17, fontWeight: '800' },
+  habPriceSub: { fontSize: 13, fontWeight: '400' },
+  bottomBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 32,
+    borderTopWidth: 1,
+  },
+  priceLabel: { fontSize: 12 },
+  priceValue: { fontSize: 18, fontWeight: '700' },
+  ctaBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12 },
+  ctaText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

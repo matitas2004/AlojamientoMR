@@ -1,97 +1,67 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-interface User {
-  token: string;
-  rol: string;
-  nombreCompleto: string;
-  email?: string;
-  usuarioId?: number;
-  clienteId?: number;
+const AuthContext = createContext(null);
+
+const STORAGE_KEY = 'amr_session';
+
+async function saveSession(data) {
+  if (Platform.OS === 'web') {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } else {
+    await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(data));
+  }
 }
 
-interface AuthContextType {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  login: (token: string, userData: Omit<User, 'token'>) => Promise<void>;
-  logout: () => Promise<void>;
+async function loadSession() {
+  if (Platform.OS === 'web') {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }
+  const raw = await SecureStore.getItemAsync(STORAGE_KEY);
+  return raw ? JSON.parse(raw) : null;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  isAuthenticated: false,
-  isLoading: true,
-  login: async () => {},
-  logout: async () => {},
-});
+async function clearSession() {
+  if (Platform.OS === 'web') {
+    localStorage.removeItem(STORAGE_KEY);
+  } else {
+    await SecureStore.deleteItemAsync(STORAGE_KEY);
+  }
+}
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Hidratar sesión al iniciar la app
   useEffect(() => {
-    (async () => {
-      try {
-        let stored = null;
-        if (Platform.OS === 'web') {
-          stored = localStorage.getItem('alojamiento_session');
-        } else {
-          stored = await SecureStore.getItemAsync('alojamiento_session');
-        }
-        
-        if (stored) {
-          setUser(JSON.parse(stored));
-        }
-      } catch {
-        // Sesión corrupta, limpiar
-        if (Platform.OS === 'web') {
-          localStorage.removeItem('alojamiento_session');
-        } else {
-          await SecureStore.deleteItemAsync('alojamiento_session');
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    })();
+    loadSession()
+      .then(data => { if (data) setUser(data); })
+      .catch(() => clearSession())
+      .finally(() => setIsLoading(false));
   }, []);
 
-  const login = async (token: string, userData: Omit<User, 'token'>) => {
-    const fullUser: User = { ...userData, token };
-    if (Platform.OS === 'web') {
-      localStorage.setItem('alojamiento_session', JSON.stringify(fullUser));
-    } else {
-      await SecureStore.setItemAsync('alojamiento_session', JSON.stringify(fullUser));
-    }
-    setUser(fullUser);
+  const login = async (token, userData) => {
+    const session = { ...userData, token };
+    await saveSession(session);
+    setUser(session);
   };
 
   const logout = async () => {
-    if (Platform.OS === 'web') {
-      localStorage.removeItem('alojamiento_session');
-    } else {
-      await SecureStore.deleteItemAsync('alojamiento_session');
-    }
+    await clearSession();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      isAuthenticated: !!user,
-      isLoading,
-      login,
-      logout,
-    }}>
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
-
-export default AuthContext;
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
+  return ctx;
+};

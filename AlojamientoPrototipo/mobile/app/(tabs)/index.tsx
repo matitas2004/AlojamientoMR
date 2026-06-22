@@ -1,46 +1,43 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity,
-  Image, RefreshControl, ActivityIndicator, TextInput,
+  View, Text, FlatList, TouchableOpacity, TextInput,
+  StyleSheet, Image, ActivityIndicator, RefreshControl, StatusBar,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
-import api from '@/lib/api';
+import { Alojamientos } from '@/lib/api';
 
-// Skeleton Loader para tarjetas
-function SkeletonCard({ colors }: { colors: any }) {
-  return (
-    <View style={[styles.card, { backgroundColor: colors.surface }]}>
-      <View style={[styles.skeletonImage, { backgroundColor: colors.skeleton }]} />
-      <View style={styles.cardBody}>
-        <View style={[styles.skeletonLine, { backgroundColor: colors.skeleton, width: '60%' }]} />
-        <View style={[styles.skeletonLine, { backgroundColor: colors.skeleton, width: '40%', marginTop: 8 }]} />
-        <View style={[styles.skeletonLine, { backgroundColor: colors.skeleton, width: '30%', marginTop: 8 }]} />
-      </View>
-    </View>
-  );
-}
+const PLACEHOLDER = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80';
+
+const DARK = {
+  bg: '#0F172A', surface: '#1E293B', border: '#334155',
+  text: '#F1F5F9', textSecondary: '#94A3B8', primary: '#3B82F6',
+};
+const LIGHT = {
+  bg: '#F8FAFC', surface: '#FFFFFF', border: '#E2E8F0',
+  text: '#0F172A', textSecondary: '#64748B', primary: '#2563EB',
+};
 
 export default function ExplorarScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const scheme = useColorScheme() ?? 'light';
+  const C = scheme === 'dark' ? DARK : LIGHT;
 
-  const [alojamientos, setAlojamientos] = useState<any[]>([]);
+  const [alojamientos, setAlojamientos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [error, setError] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
-      setError('');
-      const data = await api.getAlojamientos();
+      setError(null);
+      const res = await Alojamientos.getAll();
+      const data = res.data?.value ?? res.data ?? [];
       setAlojamientos(Array.isArray(data) ? data : []);
-    } catch (err: any) {
-      setError('Los servidores están despertando. Desliza hacia abajo para reintentar.');
+    } catch (err) {
+      setError(err.friendlyMessage || 'Error al cargar alojamientos');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -49,108 +46,117 @@ export default function ExplorarScreen() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchData();
-  }, [fetchData]);
+  const onRefresh = () => { setRefreshing(true); fetchData(); };
 
-  const filtered = alojamientos.filter(a => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (a.nombre?.toLowerCase().includes(q) || a.ciudad?.toLowerCase().includes(q));
-  });
+  const filtered = alojamientos.filter(a =>
+    (a.nombre || '').toLowerCase().includes(search.toLowerCase()) ||
+    (a.ciudad || '').toLowerCase().includes(search.toLowerCase())
+  );
 
-  const coverImages = [
-    'https://images.unsplash.com/photo-1571896349842-33c89424de2d?q=80&w=800&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=800&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1542314831-c6a4d1409e1f?q=80&w=800&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1449844908441-8829872d2607?q=80&w=800&auto=format&fit=crop',
-  ];
-
-  const renderItem = ({ item, index }: { item: any; index: number }) => (
-    <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.surface }]}
-      onPress={() => router.push(`/alojamiento/${item.alojamientoId}`)}
-      activeOpacity={0.85}
-    >
+  const renderCard = ({ item }) => (
+    <Link href={`/alojamiento/${item.alojamientoId}`} asChild>
+      <TouchableOpacity
+        style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}
+        activeOpacity={0.85}
+      >
       <Image
-        source={{ uri: coverImages[index % coverImages.length] }}
+        source={{ uri: item.imagenUrl || PLACEHOLDER }}
         style={styles.cardImage}
-        resizeMode="cover"
+        defaultSource={{ uri: PLACEHOLDER }}
       />
       <View style={styles.cardBody}>
-        <View style={styles.cardHeader}>
-          <Text style={[styles.cardCity, { color: colors.primary }]}>
-            <Ionicons name="location" size={13} color={colors.primary} /> {item.ciudad || 'Sin ciudad'}
+        <View style={styles.cardTop}>
+          <Text style={[styles.cardName, { color: C.text }]} numberOfLines={1}>
+            {item.nombre}
           </Text>
-          <View style={styles.ratingBadge}>
-            <Ionicons name="star" size={12} color="#fbbf24" />
-            <Text style={styles.ratingText}>4.9</Text>
-          </View>
+          {item.admiteMascotas && (
+            <Ionicons name="paw" size={14} color="#F59E0B" />
+          )}
         </View>
-        <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
-          {item.nombre}
-        </Text>
-        <Text style={[styles.cardAddress, { color: colors.textSecondary }]} numberOfLines={1}>
-          {item.direccion}
-        </Text>
+        <View style={styles.cardRow}>
+          <Ionicons name="location-outline" size={14} color={C.textSecondary} />
+          <Text style={[styles.cardCity, { color: C.textSecondary }]} numberOfLines={1}>
+            {item.ciudad || 'Ecuador'}
+          </Text>
+        </View>
         <View style={styles.cardFooter}>
           <View style={styles.amenities}>
-            {item.tienePiscina && <Ionicons name="water" size={14} color={colors.primary} />}
-            {item.tieneParqueadero && <Ionicons name="car" size={14} color={colors.primary} />}
-            {item.admiteMascotas && <Ionicons name="paw" size={14} color={colors.primary} />}
+            {item.tienePiscina && (
+              <View style={styles.badge}><Text style={styles.badgeText}>Piscina</Text></View>
+            )}
+            {item.tieneParqueadero && (
+              <View style={styles.badge}><Text style={styles.badgeText}>Parqueadero</Text></View>
+            )}
           </View>
+          <Text style={[styles.cardAction, { color: C.primary }]}>Ver →</Text>
         </View>
       </View>
     </TouchableOpacity>
+    </Link>
+  );
+
+  const renderSkeleton = () => (
+    <View style={{ gap: 16 }}>
+      {[1, 2, 3].map(i => (
+        <View key={i} style={[styles.card, styles.skeleton, { backgroundColor: C.surface }]} />
+      ))}
+    </View>
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Barra de búsqueda */}
-      <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Ionicons name="search" size={18} color={colors.textSecondary} />
-        <TextInput
-          style={[styles.searchInput, { color: colors.text }]}
-          placeholder="Buscar por ciudad o nombre..."
-          placeholderTextColor={colors.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery ? (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
-        ) : null}
+    <View style={[styles.container, { backgroundColor: C.bg }]}>
+      <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
+
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: C.surface, borderBottomColor: C.border }]}>
+        <View>
+          <Text style={[styles.headerTitle, { color: C.text }]}>AlojamientoMR</Text>
+          <Text style={[styles.headerSub, { color: C.textSecondary }]}>Encuentra tu lugar perfecto</Text>
+        </View>
+        <Ionicons name="bed-outline" size={28} color={C.primary} />
       </View>
 
+      {/* Search */}
+      <View style={[styles.searchBox, { backgroundColor: C.surface, borderColor: C.border }]}>
+        <Ionicons name="search-outline" size={18} color={C.textSecondary} />
+        <TextInput
+          style={[styles.searchInput, { color: C.text }]}
+          placeholder="Buscar por nombre o ciudad..."
+          placeholderTextColor={C.textSecondary}
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch('')}>
+            <Ionicons name="close-circle" size={18} color={C.textSecondary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Content */}
       {loading ? (
-        <View style={styles.skeletonList}>
-          {[1, 2, 3].map(i => <SkeletonCard key={i} colors={colors} />)}
-        </View>
+        <View style={styles.listPad}>{renderSkeleton()}</View>
       ) : error ? (
-        <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline" size={48} color={colors.textSecondary} />
-          <Text style={[styles.errorText, { color: colors.textSecondary }]}>{error}</Text>
-          <TouchableOpacity style={[styles.retryBtn, { backgroundColor: colors.primary }]} onPress={fetchData}>
-            <Text style={styles.retryBtnText}>Reintentar</Text>
+        <View style={styles.center}>
+          <Ionicons name="cloud-offline-outline" size={52} color={C.textSecondary} />
+          <Text style={[styles.errorText, { color: C.textSecondary }]}>{error}</Text>
+          <TouchableOpacity style={[styles.retryBtn, { borderColor: C.primary }]} onPress={fetchData}>
+            <Text style={[styles.retryText, { color: C.primary }]}>Reintentar</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={filtered}
-          renderItem={renderItem}
           keyExtractor={item => String(item.alojamientoId)}
-          contentContainerStyle={styles.list}
+          renderItem={renderCard}
+          contentContainerStyle={styles.listPad}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="home-outline" size={48} color={colors.textSecondary} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                No se encontraron alojamientos
+            <View style={styles.center}>
+              <Ionicons name="search-outline" size={52} color={C.textSecondary} />
+              <Text style={[styles.errorText, { color: C.textSecondary }]}>
+                {search ? 'Sin resultados para esa búsqueda' : 'No hay alojamientos disponibles'}
               </Text>
             </View>
           }
@@ -162,35 +168,39 @@ export default function ExplorarScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  searchBar: {
-    flexDirection: 'row', alignItems: 'center', marginHorizontal: 16,
-    marginTop: 8, marginBottom: 4, paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 12, borderWidth: 1, gap: 8,
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 54, paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  headerTitle: { fontSize: 22, fontWeight: '800' },
+  headerSub: { fontSize: 13, marginTop: 2 },
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginHorizontal: 16, marginVertical: 12,
+    paddingHorizontal: 14, height: 46,
+    borderRadius: 12, borderWidth: 1,
   },
   searchInput: { flex: 1, fontSize: 15 },
-  list: { paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8 },
+  listPad: { padding: 16, gap: 16 },
   card: {
-    borderRadius: 16, marginBottom: 16, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
+    borderRadius: 16, borderWidth: 1, overflow: 'hidden',
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
   },
-  cardImage: { width: '100%', height: 200 },
+  cardImage: { width: '100%', height: 180 },
   cardBody: { padding: 14 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardCity: { fontSize: 13, fontWeight: '600' },
-  ratingBadge: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  ratingText: { fontSize: 12, fontWeight: '700', color: '#fbbf24' },
-  cardTitle: { fontSize: 17, fontWeight: '700', marginTop: 4 },
-  cardAddress: { fontSize: 13, marginTop: 2 },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
-  amenities: { flexDirection: 'row', gap: 8 },
-  skeletonList: { padding: 16 },
-  skeletonImage: { width: '100%', height: 200, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
-  skeletonLine: { height: 14, borderRadius: 6 },
-  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 12 },
-  errorText: { fontSize: 15, textAlign: 'center' },
-  retryBtn: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 10 },
-  retryBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80, gap: 12 },
-  emptyText: { fontSize: 15 },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  cardName: { fontSize: 16, fontWeight: '700', flex: 1, marginRight: 8 },
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 },
+  cardCity: { fontSize: 13 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  amenities: { flexDirection: 'row', gap: 6 },
+  badge: { backgroundColor: 'rgba(59,130,246,0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  badgeText: { fontSize: 11, color: '#3B82F6', fontWeight: '600' },
+  cardAction: { fontSize: 14, fontWeight: '700' },
+  skeleton: { height: 260 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80, gap: 12 },
+  errorText: { fontSize: 15, textAlign: 'center', paddingHorizontal: 32 },
+  retryBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 10, borderWidth: 2 },
+  retryText: { fontWeight: '700', fontSize: 15 },
 });

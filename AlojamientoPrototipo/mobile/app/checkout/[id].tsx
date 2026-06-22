@@ -1,54 +1,63 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  TextInput, ActivityIndicator, Alert,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useAuth } from '@/lib/AuthContext';
-import api from '@/lib/api';
+import { Reservas, Facturas } from '@/lib/api';
+
+const DARK = { bg: '#0F172A', surface: '#1E293B', border: '#334155', text: '#F1F5F9', textSecondary: '#94A3B8', primary: '#3B82F6', success: '#10B981' };
+const LIGHT = { bg: '#F8FAFC', surface: '#FFFFFF', border: '#E2E8F0', text: '#0F172A', textSecondary: '#64748B', primary: '#2563EB', success: '#059669' };
+
+function PriceRow({ label, value, bold, C }) {
+  return (
+    <View style={styles.priceRow}>
+      <Text style={[styles.priceLabel, { color: bold ? C.text : C.textSecondary }, bold && { fontWeight: '700', fontSize: 16 }]}>
+        {label}
+      </Text>
+      <Text style={[styles.priceValue, { color: bold ? C.primary : C.text }, bold && { fontSize: 20, fontWeight: '800' }]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
 
 export default function CheckoutScreen() {
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const { user, isAuthenticated } = useAuth();
-
   const { id, habitacionId, precioNoche, noches, alojamientoNombre } = useLocalSearchParams();
+  const scheme = useColorScheme() ?? 'light';
+  const C = scheme === 'dark' ? DARK : LIGHT;
+  const { user } = useAuth();
 
-  const [loading, setLoading] = useState(false);
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvv, setCvv] = useState('');
-
-  // Validaciones
   const pNoche = Number(precioNoche) || 0;
-  const numNoches = Number(noches) || 1;
+  const numNoches = Number(noches) || 2;
   const subtotal = pNoche * numNoches;
-  const impuestos = subtotal * 0.15; // 15%
+  const impuestos = subtotal * 0.15;
   const total = subtotal + impuestos;
 
+  const [card, setCard] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [loading, setLoading] = useState(false);
+
   const handlePagar = async () => {
-    if (!isAuthenticated) {
-      router.push('/login');
+    if (card.length < 16 || expiry.length < 5 || cvv.length < 3) {
+      Alert.alert('Datos incompletos', 'Por favor ingresa los datos de la tarjeta (simulados).');
       return;
     }
-    if (cardNumber.length < 16 || expiry.length < 5 || cvv.length < 3) {
-      Alert.alert('Error', 'Por favor ingresa datos de tarjeta válidos (simulados).');
-      return;
-    }
-
     setLoading(true);
-
     try {
-      // 1. Fechas calculadas a partir de hoy (para la demo)
       const checkIn = new Date();
       checkIn.setDate(checkIn.getDate() + 1);
       const checkOut = new Date();
       checkOut.setDate(checkOut.getDate() + 1 + numNoches);
 
-      // 2. Crear Reserva
-      const reserva = await api.crearReserva({
-        clienteId: user?.usuarioId || user?.clienteId || 1,
+      // 1. Crear reserva
+      const resRes = await Reservas.crear({
+        clienteId: user?.clienteId ?? user?.usuarioId ?? 1,
         alojamientoId: Number(id),
         fechaCheckIn: checkIn.toISOString().split('T')[0],
         fechaCheckOut: checkOut.toISOString().split('T')[0],
@@ -58,137 +67,154 @@ export default function CheckoutScreen() {
         habitaciones: [{
           habitacionId: Number(habitacionId),
           numNoches: numNoches,
-          precioPorNoche: pNoche
-        }]
+          precioPorNoche: pNoche,
+        }],
       });
 
-      // Obtener el ID/Código de la reserva que nos devolvió el backend
-      const resId = reserva.reservaId;
-      const resCodigo = reserva.codigoReserva || `RES-${resId}`;
+      const reservaId = resRes.data?.reservaId ?? resRes.data?.value?.reservaId;
 
-      // 3. Crear Factura explícita
+      // 2. Crear factura
       try {
-        await api.crearFactura({
-          reservaId: resId,
-          fechaEmision: new Date().toISOString().split('T')[0],
-          monto: total, // Pasamos el monto explícito para evitar el bug de monto 0
-          metodoPagoId: 1 // Tarjeta
+        await Facturas.crear({
+          reservaId: Number(reservaId),
+          monto: total,
+          metodoPagoId: 1,
+          detalles: [{
+            descripcion: `Estadía en ${alojamientoNombre || 'Alojamiento'} - Habitación #${habitacionId}`,
+            cantidad: numNoches,
+            precioUnitario: pNoche,
+          }]
         });
-      } catch (fErr) {
-        // Si la factura falla por la comunicación síncrona o asíncrona, avanzamos igual
-        console.warn('Factura creation backgrounded or failed', fErr);
+      } catch (_) {
+        // Si falla la factura, continuamos al recibo con el total calculado localmente
       }
 
-      Alert.alert('¡Pago Exitoso!', 'Tu reserva ha sido confirmada.');
-      // Ir al recibo / factura usando replace para que no vuelva atrás al checkout
-      router.replace({ pathname: `/factura/${resId}`, params: { totalFallback: total } } as any);
+      router.replace({
+        pathname: `/factura/${reservaId}`,
+        params: { totalFallback: total, alojamientoNombre },
+      } as any);
 
-    } catch (err: any) {
-      Alert.alert('Error', 'Hubo un problema al procesar el pago.');
+    } catch (err) {
+      Alert.alert('Error', err.friendlyMessage || 'No se pudo procesar el pago.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+    <View style={[styles.container, { backgroundColor: C.bg }]}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: C.surface, borderBottomColor: C.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={22} color={C.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Confirmar y Pagar</Text>
-        <View style={{ width: 24 }} />
+        <Text style={[styles.headerTitle, { color: C.text }]}>Confirmar y Pagar</Text>
+        <View style={{ width: 32 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Resumen de tu reserva</Text>
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.alojamientoName, { color: colors.text }]}>{alojamientoNombre || 'Alojamiento'}</Text>
-          <Text style={[styles.detailsText, { color: colors.textSecondary }]}>
-            Habitación: {habitacionId}
-          </Text>
-          <Text style={[styles.detailsText, { color: colors.textSecondary }]}>
-            Duración: {numNoches} noche(s)
-          </Text>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Resumen */}
+        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
+          <Text style={[styles.sectionTitle, { color: C.text }]}>Tu Reserva</Text>
+          <Text style={[styles.alojNombre, { color: C.primary }]}>{alojamientoNombre || 'Alojamiento'}</Text>
+          <View style={styles.infoGrid}>
+            <View style={styles.infoItem}>
+              <Ionicons name="bed-outline" size={16} color={C.textSecondary} />
+              <Text style={[styles.infoText, { color: C.textSecondary }]}>Hab. #{habitacionId}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Ionicons name="moon-outline" size={16} color={C.textSecondary} />
+              <Text style={[styles.infoText, { color: C.textSecondary }]}>{numNoches} noches</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Ionicons name="calendar-outline" size={16} color={C.textSecondary} />
+              <Text style={[styles.infoText, { color: C.textSecondary }]}>Mañana → {numNoches + 1}d</Text>
+            </View>
+          </View>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 24 }]}>Detalle del Precio</Text>
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <View style={styles.row}>
-            <Text style={[styles.priceText, { color: colors.textSecondary }]}>
-              ${pNoche.toFixed(2)} x {numNoches} noches
+        {/* Precios */}
+        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
+          <Text style={[styles.sectionTitle, { color: C.text }]}>Desglose</Text>
+          <PriceRow label={`$${pNoche.toFixed(2)} × ${numNoches} noches`} value={`$${subtotal.toFixed(2)}`} C={C} />
+          <PriceRow label="Impuestos (15% IVA)" value={`$${impuestos.toFixed(2)}`} C={C} />
+          <View style={[styles.divider, { backgroundColor: C.border }]} />
+          <PriceRow label="Total a pagar" value={`$${total.toFixed(2)}`} bold C={C} />
+        </View>
+
+        {/* Tarjeta (simulada) */}
+        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
+          <Text style={[styles.sectionTitle, { color: C.text }]}>Método de Pago</Text>
+          <View style={[styles.cardSimNote, { backgroundColor: `${C.primary}15` }]}>
+            <Ionicons name="information-circle-outline" size={16} color={C.primary} />
+            <Text style={[styles.simNoteText, { color: C.primary }]}>
+              Ingresa datos de prueba (no reales)
             </Text>
-            <Text style={[styles.priceValue, { color: colors.text }]}>${subtotal.toFixed(2)}</Text>
           </View>
-          <View style={styles.row}>
-            <Text style={[styles.priceText, { color: colors.textSecondary }]}>Impuestos (15%)</Text>
-            <Text style={[styles.priceValue, { color: colors.text }]}>${impuestos.toFixed(2)}</Text>
-          </View>
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <View style={styles.row}>
-            <Text style={[styles.totalText, { color: colors.text }]}>Total a Pagar</Text>
-            <Text style={[styles.totalValue, { color: colors.primaryDark }]}>${total.toFixed(2)}</Text>
-          </View>
-        </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 24 }]}>Método de Pago</Text>
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Número de Tarjeta</Text>
+          <Text style={[styles.inputLabel, { color: C.text }]}>Número de Tarjeta</Text>
+          <View style={[styles.inputBox, { borderColor: C.border, backgroundColor: C.bg }]}>
+            <Ionicons name="card-outline" size={18} color={C.textSecondary} style={{ paddingLeft: 12 }} />
             <TextInput
-              style={[styles.input, { borderColor: colors.border, color: colors.text }]}
+              style={[styles.input, { color: C.text }]}
               placeholder="0000 0000 0000 0000"
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={C.textSecondary}
               keyboardType="number-pad"
               maxLength={16}
-              value={cardNumber}
-              onChangeText={setCardNumber}
+              value={card}
+              onChangeText={setCard}
             />
           </View>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={[styles.inputGroup, { flex: 1 }]}>
-              <Text style={[styles.label, { color: colors.text }]}>Vencimiento</Text>
-              <TextInput
-                style={[styles.input, { borderColor: colors.border, color: colors.text }]}
-                placeholder="MM/YY"
-                placeholderTextColor={colors.textSecondary}
-                maxLength={5}
-                value={expiry}
-                onChangeText={setExpiry}
-              />
+
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.inputLabel, { color: C.text }]}>Vencimiento</Text>
+              <View style={[styles.inputBox, { borderColor: C.border, backgroundColor: C.bg }]}>
+                <TextInput
+                  style={[styles.input, { color: C.text, paddingLeft: 14 }]}
+                  placeholder="MM/YY"
+                  placeholderTextColor={C.textSecondary}
+                  maxLength={5}
+                  value={expiry}
+                  onChangeText={setExpiry}
+                />
+              </View>
             </View>
-            <View style={[styles.inputGroup, { flex: 1 }]}>
-              <Text style={[styles.label, { color: colors.text }]}>CVV</Text>
-              <TextInput
-                style={[styles.input, { borderColor: colors.border, color: colors.text }]}
-                placeholder="123"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="number-pad"
-                maxLength={3}
-                value={cvv}
-                onChangeText={setCvv}
-              />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.inputLabel, { color: C.text }]}>CVV</Text>
+              <View style={[styles.inputBox, { borderColor: C.border, backgroundColor: C.bg }]}>
+                <TextInput
+                  style={[styles.input, { color: C.text, paddingLeft: 14 }]}
+                  placeholder="123"
+                  placeholderTextColor={C.textSecondary}
+                  keyboardType="number-pad"
+                  maxLength={3}
+                  value={cvv}
+                  onChangeText={setCvv}
+                  secureTextEntry
+                />
+              </View>
             </View>
           </View>
-          <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 8 }}>
-            * Esto es una simulación. No ingreses datos reales.
-          </Text>
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
 
-      <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-        <TouchableOpacity 
-          style={[styles.payBtn, { backgroundColor: colors.primary }, loading && { opacity: 0.7 }]}
+      {/* Pay Button */}
+      <View style={[styles.bottomBar, { backgroundColor: C.surface, borderTopColor: C.border }]}>
+        <TouchableOpacity
+          style={[styles.payBtn, { backgroundColor: C.primary }, loading && { opacity: 0.7 }]}
           onPress={handlePagar}
           disabled={loading}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.payBtnText}>Pagar ${total.toFixed(2)}</Text>
-          )}
+          {loading
+            ? <ActivityIndicator color="#fff" />
+            : <>
+                <Ionicons name="lock-closed" size={18} color="#fff" />
+                <Text style={styles.payText}>Pagar ${total.toFixed(2)}</Text>
+              </>
+          }
         </TouchableOpacity>
       </View>
     </View>
@@ -197,24 +223,27 @@ export default function CheckoutScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 50, paddingBottom: 16, borderBottomWidth: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 14, borderBottomWidth: 1 },
   backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: '700' },
-  content: { padding: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
-  card: { padding: 16, borderRadius: 12, marginBottom: 8, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  alojamientoName: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
-  detailsText: { fontSize: 14, marginBottom: 4 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  priceText: { fontSize: 15 },
-  priceValue: { fontSize: 15, fontWeight: '600' },
-  divider: { height: 1, marginVertical: 12 },
-  totalText: { fontSize: 18, fontWeight: '800' },
-  totalValue: { fontSize: 18, fontWeight: '800' },
-  inputGroup: { marginBottom: 16 },
-  label: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
-  input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, height: 48, fontSize: 16 },
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingVertical: 16, paddingBottom: 32, borderTopWidth: 1 },
-  payBtn: { height: 56, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  payBtnText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  headerTitle: { fontSize: 17, fontWeight: '700' },
+  scroll: { padding: 16, gap: 14 },
+  card: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 10 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
+  alojNombre: { fontSize: 16, fontWeight: '700' },
+  infoGrid: { flexDirection: 'row', gap: 16 },
+  infoItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  infoText: { fontSize: 13 },
+  priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 3 },
+  priceLabel: { fontSize: 14, color: '#64748B' },
+  priceValue: { fontSize: 14, fontWeight: '600' },
+  divider: { height: 1, marginVertical: 8 },
+  cardSimNote: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 10, borderRadius: 8, marginBottom: 4 },
+  simNoteText: { fontSize: 12, fontWeight: '600' },
+  inputLabel: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  inputBox: { flexDirection: 'row', alignItems: 'center', height: 48, borderWidth: 1.5, borderRadius: 10 },
+  input: { flex: 1, paddingHorizontal: 10, fontSize: 15, height: '100%' },
+  row: { flexDirection: 'row', gap: 12 },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, paddingBottom: 36, borderTopWidth: 1 },
+  payBtn: { height: 56, borderRadius: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+  payText: { color: '#fff', fontSize: 17, fontWeight: '700' },
 });

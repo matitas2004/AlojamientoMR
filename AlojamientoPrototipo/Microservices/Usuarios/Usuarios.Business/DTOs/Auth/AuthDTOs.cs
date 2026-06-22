@@ -10,5 +10,8 @@ public record LoginRequest(
 public record LoginResponse(
     string Token,
     string Rol,
-    string NombreCompleto
+    string NombreCompleto,
+    int UsuarioId,
+    int? ClienteId,
+    string Email
 );
