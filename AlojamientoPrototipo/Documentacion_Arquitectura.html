@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentación Arquitectónica - AlojamientoMR</title>
+    <style>
+        /* Estilos Generales */
+        :root {
+            --primary: #1e3a8a; /* Azul corporativo */
+            --secondary: #3b82f6;
+            --text-main: #1f2937;
+            --text-light: #4b5563;
+            --border: #e5e7eb;
+            --bg-light: #f3f4f6;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.7;
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            background-color: #fff;
+        }
+
+        /* Contenedor principal que simula una hoja A4 en pantalla */
+        .document-container {
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        h1, h2, h3, h4 {
+            color: var(--primary);
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+        }
+
+        h1 { font-size: 2.5rem; border-bottom: 2px solid var(--primary); padding-bottom: 10px; }
+        h2 { font-size: 1.8rem; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+        h3 { font-size: 1.4rem; }
+
+        p { margin-bottom: 1rem; text-align: justify; }
+        
+        ul, ol { margin-bottom: 1.5rem; padding-left: 2rem; }
+        li { margin-bottom: 0.5rem; }
+
+        .highlight-box {
+            background-color: var(--bg-light);
+            border-left: 4px solid var(--secondary);
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+
+        /* Diagramas (Simulados con CSS) */
+        .diagram-container {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+            background: #fafafa;
+            text-align: center;
+        }
+        
+        .diagram-box {
+            display: inline-block;
+            background: white;
+            border: 2px solid var(--primary);
+            border-radius: 6px;
+            padding: 15px 25px;
+            margin: 10px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .diagram-arrow {
+            display: inline-block;
+            color: var(--secondary);
+            font-size: 24px;
+            font-weight: bold;
+            vertical-align: middle;
+            margin: 0 10px;
+        }
+
+        /* Tablas */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+        }
+        th, td {
+            border: 1px solid var(--border);
+            padding: 12px 15px;
+            text-align: left;
+        }
+        th { background-color: var(--primary); color: white; }
+        tr:nth-child(even) { background-color: var(--bg-light); }
+
+        /* Estilos específicos para impresión (PDF) */
+        @media print {
+            body { font-size: 11pt; background: white; }
+            .document-container { padding: 0; max-width: 100%; margin: 0; }
+            .page-break { page-break-before: always; }
+            .avoid-break { page-break-inside: avoid; }
+            
+            /* Portada */
+            .cover-page {
+                height: 90vh; /* Ocupa casi toda la primera hoja */
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                text-align: center;
+            }
+            .cover-title { font-size: 3.5rem; margin-bottom: 20px; border: none; }
+            .cover-subtitle { font-size: 1.5rem; color: var(--text-light); margin-bottom: 50px; }
+            .cover-author { font-size: 1.2rem; font-weight: bold; margin-top: auto; padding-bottom: 50px; }
+            
+            /* Footer de impresión */
+            @page {
+                margin: 2cm;
+                @bottom-right {
+                    content: counter(page);
+                }
+            }
+        }
+        
+        /* Portada en pantalla */
+        @media screen {
+            .cover-page {
+                text-align: center;
+                padding: 100px 20px;
+                background: linear-gradient(to bottom, #ffffff, var(--bg-light));
+                border-bottom: 2px solid var(--border);
+                margin-bottom: 40px;
+            }
+            .cover-title { border: none; }
+            .page-break { margin-top: 60px; padding-top: 40px; border-top: 2px dashed #ccc; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="document-container">
+
+    <!-- ======================= HOJA 1: PORTADA ======================= -->
+    <div class="cover-page">
+        <div>
+            <h1 class="cover-title">Documentación Técnica y Arquitectónica</h1>
+            <div class="cover-subtitle">Diseño, Flujos de Integración y Conexión con el Sistema Booking</div>
+        </div>
+        <div class="cover-author">
+            <p>Autor y Desarrollador Principal</p>
+            <p style="font-size: 1.5rem; color: var(--primary);">Mathias Rivera</p>
+            <p style="font-weight: normal; color: var(--text-light);">Mayo 2026</p>
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- ======================= HOJA 2: ARQUITECTURA Y MICROSERVICIOS ======================= -->
+    <h2>1. Resumen Ejecutivo</h2>
+    <p>
+        El presente documento detalla la arquitectura de software diseñada e implementada para la plataforma <strong>AlojamientoMR</strong>. El sistema ha sido concebido bajo un paradigma moderno de <strong>Microservicios</strong>, lo cual permite que cada dominio del negocio (Usuarios, Alojamientos, Reservas, Facturación) opere de manera independiente, escalable y resiliente.
+    </p>
+    <p>
+        Adicionalmente, se documenta la integración entre el panel administrativo (Frontend Principal) y la interfaz de cara al cliente final (Plataforma Booking), detallando el flujo de datos y el rol crítico del <em>API Gateway</em> en la orquestación de las solicitudes.
+    </p>
+
+    <h2>2. Arquitectura del Sistema</h2>
+    
+    <h3>2.1. Paradigma de Microservicios</h3>
+    <p>
+        La solución backend ha sido fragmentada en múltiples servicios pequeños desarrollados en C# (.NET). Cada servicio posee su propia responsabilidad y, en su diseño ideal, su propia base de datos (o esquemas separados), garantizando un bajo acoplamiento.
+    </p>
+
+    <table class="avoid-break">
+        <thead>
+            <tr>
+                <th>Microservicio</th>
+                <th>Responsabilidad Principal</th>
+                <th>Dominio / URL Base (Render)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Alojamientos API</strong></td>
+                <td>Gestión de propiedades, habitaciones, amenidades y categorías.</td>
+                <td><code>alojamientosmr-api.onrender.com</code></td>
+            </tr>
+            <tr>
+                <td><strong>Usuarios API</strong></td>
+                <td>Autenticación, roles (Admin/Cliente), gestión de perfiles.</td>
+                <td><code>usuariosmr-api.onrender.com</code></td>
+            </tr>
+            <tr>
+                <td><strong>Reservas API</strong></td>
+                <td>Creación, validación de fechas, y estado de las reservas.</td>
+                <td><code>reservasmr-api.onrender.com</code></td>
+            </tr>
+            <tr>
+                <td><strong>Facturación API</strong></td>
+                <td>Generación de comprobantes, control de pagos e impuestos.</td>
+                <td><code>facturacionmr-api.onrender.com</code></td>
+            </tr>
+            <tr>
+                <td><strong>Booking API</strong></td>
+                <td>Capa especializada para procesar las transacciones del carrito público.</td>
+                <td><code>microservicio-reservas-booking...</code></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="highlight-box avoid-break">
+        <strong>Rol del API Gateway (Ocelot):</strong><br>
+        Para evitar que los clientes (Frontends) tengan que conocer la dirección de los 5 servidores distintos, se ha implementado un <strong>API Gateway</strong> (<code>apigateway-mr.onrender.com</code>). Este servidor actúa como el "guardia de tráfico": recibe todas las peticiones, verifica los permisos, y enruta silenciosamente la petición al microservicio correspondiente.
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- ======================= HOJA 3: FLUJOS Y CONEXIÓN CON BOOKING ======================= -->
+    <h2>3. Conexión con la Plataforma Booking</h2>
+    <p>
+        El sistema cuenta con dos frentes interactivos construidos en React/Next.js: el Panel de Administración (usado por empleados y gerentes) y la Plataforma Booking (usada por el huésped final).
+    </p>
+
+    <h3>3.1. Esquema de Comunicación</h3>
+    <p>
+        La plataforma Booking no se comunica directamente con las bases de datos. Todo el flujo de información está protegido y orquestado a través de peticiones HTTP RESTFUL. Cuando un cliente ingresa al portal de Booking para buscar una habitación, ocurre la siguiente cadena de eventos:
+    </p>
+
+    <div class="diagram-container avoid-break">
+        <div class="diagram-box">💻 Frontend<br>(Booking Web)</div>
+        <div class="diagram-arrow">➔</div>
+        <div class="diagram-box">🛡️ API Gateway<br>(Enrutador)</div>
+        <div class="diagram-arrow">➔</div>
+        <div class="diagram-box">⚙️ Microservicio<br>(Alojamientos)</div>
+        <div class="diagram-arrow">➔</div>
+        <div class="diagram-box">🗄️ Base de Datos<br>(SQL Server)</div>
+    </div>
+
+    <h3>3.2. Flujo Detallado de Creación de una Reserva</h3>
+    <p>
+        El proceso transaccional más complejo de la arquitectura ocurre cuando un cliente confirma el pago en el Checkout del Booking. Para mantener la integridad de los datos, el flujo sigue un patrón orquestado:
+    </p>
+
+    <ol>
+        <li><strong>Iniciación:</strong> El huésped selecciona sus fechas, habitaciones y procede al Checkout. El frontend de Booking envía un <em>POST</em> al endpoint de transacciones (usualmente a través del Gateway o del microservicio exclusivo de Booking).</li>
+        <li><strong>Validación (Síncrona):</strong> El backend verifica en tiempo real que las fechas no se hayan sobrevendido (doble reserva) consultando al microservicio de Alojamientos y Reservas.</li>
+        <li><strong>Registro de Reserva:</strong> Se inserta el registro con estado "Pendiente" en la base de datos de <code>reservasmr-api</code>.</li>
+        <li><strong>Procesamiento de Pago:</strong> Se ejecuta la orden de pago. Si la pasarela de pagos rechaza la transacción, la reserva queda en estado "Fallido".</li>
+        <li><strong>Facturación (Asíncrona/Desacoplada):</strong> Solo cuando el pago es exitoso o la reserva es aprobada manualmente por un administrador en el Dashboard, el sistema se comunica con <code>facturacionmr-api</code> para emitir el comprobante legal. Si el cliente busca la factura antes de este paso, el frontend maneja el estado elegantemente indicando que la factura está "en proceso".</li>
+    </ol>
+
+    <div class="highlight-box avoid-break">
+        <strong>Consideraciones Técnicas sobre la Latencia (Cold Starts):</strong><br>
+        Actualmente, la infraestructura de despliegue se apoya en capas gratuitas (Render Free Tier). Esto introduce un comportamiento conocido como <em>"Cold Start"</em> (Arranque en frío). Si el sistema pasa 15 minutos sin recibir visitas, los microservicios "se duermen" para ahorrar recursos. Al despertar, el encendido simultáneo de 5 servicios puede causar latencias temporales. Para mitigar esto, se han implementado <em>monitores (UptimeRobot)</em> que inyectan tráfico fantasma cada 5 minutos, manteniendo la base de datos y la memoria RAM siempre activas.
+    </div>
+
+    <h2>4. Conclusión</h2>
+    <p>
+        La arquitectura desarrollada para <strong>AlojamientoMR</strong> por Mathias Rivera representa una solución altamente escalable, estándar en la industria de software actual (Enterprise N-Tier). La separación en microservicios asegura que si el módulo de Facturación llega a fallar, los clientes aún puedan seguir navegando el Booking y registrando usuarios, garantizando alta disponibilidad comercial.
+    </p>
+
+</div>
+
+<script>
+    // Pequeño script para imprimir automáticamente si el usuario lo desea (opcional)
+    // window.onload = function() { window.print(); }
+</script>
+</body>
+</html>

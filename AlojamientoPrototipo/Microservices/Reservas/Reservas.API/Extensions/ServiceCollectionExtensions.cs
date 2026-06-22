@@ -7,6 +7,8 @@ using Reservas.Business.Interfaces;
 using Reservas.Business.Services;
 
 using Microsoft.Extensions.Configuration;
+using Polly;
+using Polly.Extensions.Http;
 
 namespace Reservas.API.Extensions;
 
@@ -34,7 +36,13 @@ public static class ServiceCollectionExtensions
         {
             o.Address = new Uri(grpcUrl);
         })
-        .ConfigurePrimaryHttpMessageHandler(() => new Grpc.Net.Client.Web.GrpcWebHandler(new HttpClientHandler()));
+        .ConfigurePrimaryHttpMessageHandler(() => new Grpc.Net.Client.Web.GrpcWebHandler(new HttpClientHandler()))
+        .AddPolicyHandler(HttpPolicyExtensions
+            .HandleTransientHttpError()
+            .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))))
+        .AddPolicyHandler(HttpPolicyExtensions
+            .HandleTransientHttpError()
+            .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
 
         return services;
     }

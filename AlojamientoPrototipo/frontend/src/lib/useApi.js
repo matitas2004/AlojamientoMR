@@ -24,10 +24,11 @@ export default function useApi(url, options = {}) {
     fetcher,
     {
       revalidateOnFocus: false,       // No recargar al volver a la pestaña
-      dedupingInterval: 10000,        // Deduplicar peticiones iguales en 10s
-      errorRetryCount: 2,             // Solo reintentar 2 veces
-      errorRetryInterval: 3000,       // Esperar 3s entre reintentos
+      dedupingInterval: 2000,         // Deduplicar peticiones iguales en 2s (era 10s)
+      errorRetryCount: 3,             // Reintentar 3 veces (para cold starts de Render)
+      errorRetryInterval: 2000,       // Esperar 2s entre reintentos
       keepPreviousData: true,         // Mantener datos antiguos mientras carga nuevos
+      refreshInterval: 0,             // Sin polling automático
       ...options,
     }
   );

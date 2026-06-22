@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { Building2, BedDouble, CalendarDays, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import useApi from '@/lib/useApi';
@@ -11,30 +11,11 @@ export default function AdminDashboard() {
   const { user } = useAuthStore();
   const { data: alojamientos, isLoading: loadingAloj } = useApi('/alojamientos', { fallbackData: [] });
   const { data: habitaciones } = useApi('/habitaciones', { fallbackData: [] });
-  const [reservas, setReservas] = useState([]);
-  const [loadingReservas, setLoadingReservas] = useState(true);
+  // ✅ CORRECCIÓN: Usamos useApi en lugar de fetch manual para consistencia
+  const { data: reservasRaw, isLoading: loadingReservas } = useApi('/reservas', { fallbackData: [] });
+  const reservas = Array.isArray(reservasRaw) ? reservasRaw : [];
 
-  // Client-Side Aggregation para evitar el timeout de 10s de Vercel
-  useEffect(() => {
-    const fetchAllReservas = async () => {
-      setLoadingReservas(true);
-      try {
-        const res = await fetch('/api/reservas');
-        if (res.ok) {
-          const todas = await res.json();
-          setReservas(Array.isArray(todas) ? todas : []);
-        } else {
-          setReservas([]);
-        }
-      } catch (err) {
-        console.error("Fetch API falló", err);
-        setReservas([]);
-      } finally {
-        setLoadingReservas(false);
-      }
-    };
-    fetchAllReservas();
-  }, []);
+
 
   const stats = useMemo(() => {
     const alojArr = Array.isArray(alojamientos) ? alojamientos : [];
