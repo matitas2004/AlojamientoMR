@@ -22,6 +22,32 @@ function Amenity({ icon, label, C }) {
   );
 }
 
+// ── Selector +/− genérico ────────────────────────────────────────────────────
+function Counter({ label, value, onDec, onInc, min = 1, max = 30, C }) {
+  return (
+    <View style={styles.counterRow}>
+      <Text style={[styles.counterLabel, { color: C.text }]}>{label}</Text>
+      <View style={styles.counterControls}>
+        <TouchableOpacity
+          onPress={onDec}
+          disabled={value <= min}
+          style={[styles.counterBtn, { borderColor: C.border, backgroundColor: C.surface, opacity: value <= min ? 0.4 : 1 }]}
+        >
+          <Ionicons name="remove" size={18} color={C.primary} />
+        </TouchableOpacity>
+        <Text style={[styles.counterValue, { color: C.text }]}>{value}</Text>
+        <TouchableOpacity
+          onPress={onInc}
+          disabled={value >= max}
+          style={[styles.counterBtn, { borderColor: C.border, backgroundColor: C.surface, opacity: value >= max ? 0.4 : 1 }]}
+        >
+          <Ionicons name="add" size={18} color={C.primary} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 export default function AlojamientoScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -33,6 +59,7 @@ export default function AlojamientoScreen() {
   const [habitaciones, setHabitaciones] = useState([]);
   const [selectedHab, setSelectedHab] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [noches, setNoches] = useState(2);   // ← SELECCIONABLE por el usuario
 
   const fetchData = useCallback(async () => {
     try {
@@ -68,7 +95,7 @@ export default function AlojamientoScreen() {
       params: {
         habitacionId: selectedHab.habitacionId,
         precioNoche: selectedHab.precioNoche ?? 0,
-        noches: 2,
+        noches: noches,                            // ← dinámico
         alojamientoNombre: alojamiento?.nombre ?? '',
       },
     } as any);
@@ -93,6 +120,8 @@ export default function AlojamientoScreen() {
       </View>
     );
   }
+
+  const precioTotal = (selectedHab?.precioNoche ?? 0) * noches;
 
   return (
     <View style={[styles.container, { backgroundColor: C.bg }]}>
@@ -181,6 +210,28 @@ export default function AlojamientoScreen() {
             </View>
           )}
 
+          {/* ── Selector de Noches ──────────────────────────────────────── */}
+          <View style={[styles.section, styles.selectorBox, { backgroundColor: C.surface, borderColor: C.border }]}>
+            <Text style={[styles.sectionTitle, { color: C.text }]}>Configuración de la Estadía</Text>
+            <Counter
+              label="Número de noches"
+              value={noches}
+              onDec={() => setNoches(n => Math.max(1, n - 1))}
+              onInc={() => setNoches(n => Math.min(30, n + 1))}
+              min={1}
+              max={30}
+              C={C}
+            />
+            {selectedHab && (
+              <View style={[styles.totalPreview, { backgroundColor: `${C.primary}15`, borderColor: `${C.primary}30` }]}>
+                <Ionicons name="calculator-outline" size={16} color={C.primary} />
+                <Text style={[styles.totalPreviewText, { color: C.primary }]}>
+                  Estimado: ${(selectedHab.precioNoche ?? 0).toFixed(2)} × {noches} noches = <Text style={{ fontWeight: '800' }}>${precioTotal.toFixed(2)}</Text>
+                </Text>
+              </View>
+            )}
+          </View>
+
           <View style={{ height: 120 }} />
         </View>
       </ScrollView>
@@ -189,9 +240,9 @@ export default function AlojamientoScreen() {
       <View style={[styles.bottomBar, { backgroundColor: C.surface, borderTopColor: C.border }]}>
         {selectedHab && (
           <View>
-            <Text style={[styles.priceLabel, { color: C.textSecondary }]}>Desde</Text>
+            <Text style={[styles.priceLabel, { color: C.textSecondary }]}>Total ({noches}n)</Text>
             <Text style={[styles.priceValue, { color: C.text }]}>
-              ${(selectedHab.precioNoche ?? 0).toFixed(2)}/noche
+              ${precioTotal.toFixed(2)}
             </Text>
           </View>
         )}
@@ -236,6 +287,16 @@ const styles = StyleSheet.create({
   habDetailText: { fontSize: 12 },
   habPrice: { fontSize: 17, fontWeight: '800' },
   habPriceSub: { fontSize: 13, fontWeight: '400' },
+  // ── Selector Box ──────────────────────────────────────────────────────────
+  selectorBox: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 12 },
+  counterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  counterLabel: { fontSize: 15, fontWeight: '600' },
+  counterControls: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  counterBtn: { width: 36, height: 36, borderRadius: 10, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
+  counterValue: { fontSize: 20, fontWeight: '800', minWidth: 28, textAlign: 'center' },
+  totalPreview: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 10, borderWidth: 1, marginTop: 4 },
+  totalPreviewText: { fontSize: 13, flex: 1 },
+  // ── Bottom Bar ────────────────────────────────────────────────────────────
   bottomBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',

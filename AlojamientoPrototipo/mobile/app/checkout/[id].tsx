@@ -25,6 +25,47 @@ function PriceRow({ label, value, bold, C }) {
   );
 }
 
+// ── Selector +/− ────────────────────────────────────────────────────────────
+function Counter({ label, subtitle, value, onDec, onInc, min = 0, max = 10, C }) {
+  return (
+    <View style={styles.counterRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.counterLabel, { color: C.text }]}>{label}</Text>
+        {subtitle ? <Text style={[styles.counterSub, { color: C.textSecondary }]}>{subtitle}</Text> : null}
+      </View>
+      <View style={styles.counterControls}>
+        <TouchableOpacity
+          onPress={onDec}
+          disabled={value <= min}
+          style={[styles.counterBtn, { borderColor: C.border, backgroundColor: C.surface, opacity: value <= min ? 0.4 : 1 }]}
+        >
+          <Ionicons name="remove" size={18} color={C.primary} />
+        </TouchableOpacity>
+        <Text style={[styles.counterValue, { color: C.text }]}>{value}</Text>
+        <TouchableOpacity
+          onPress={onInc}
+          disabled={value >= max}
+          style={[styles.counterBtn, { borderColor: C.border, backgroundColor: C.surface, opacity: value >= max ? 0.4 : 1 }]}
+        >
+          <Ionicons name="add" size={18} color={C.primary} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// ── Formatear tarjeta automáticamente en grupos de 4 ────────────────────────
+function formatCardNumber(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 16);
+  return digits.replace(/(.{4})/g, '$1 ').trim();
+}
+
+function formatExpiry(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 4);
+  if (digits.length >= 3) return digits.slice(0, 2) + '/' + digits.slice(2);
+  return digits;
+}
+
 export default function CheckoutScreen() {
   const router = useRouter();
   const { id, habitacionId, precioNoche, noches, alojamientoNombre } = useLocalSearchParams();
@@ -38,14 +79,22 @@ export default function CheckoutScreen() {
   const impuestos = subtotal * 0.15;
   const total = subtotal + impuestos;
 
+  // ── Personas ────────────────────────────────────────────────────────────
+  const [numAdultos, setNumAdultos] = useState(2);
+  const [numNinos, setNumNinos] = useState(0);
+
+  // ── Tarjeta ─────────────────────────────────────────────────────────────
   const [card, setCard] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handlePagar = async () => {
-    if (card.length < 16 || expiry.length < 5 || cvv.length < 3) {
-      Alert.alert('Datos incompletos', 'Por favor ingresa los datos de la tarjeta (simulados).');
+    // Validar tarjeta sin espacios
+    const rawCard = card.replace(/\s/g, '');
+    const rawExpiry = expiry.replace(/\//g, '');
+    if (rawCard.length < 16 || rawExpiry.length < 4 || cvv.length < 3) {
+      Alert.alert('Datos incompletos', 'Por favor ingresa los datos de la tarjeta correctamente.\n\n• Número: 16 dígitos\n• Vencimiento: MM/YY\n• CVV: 3 dígitos');
       return;
     }
     setLoading(true);
@@ -55,14 +104,14 @@ export default function CheckoutScreen() {
       const checkOut = new Date();
       checkOut.setDate(checkOut.getDate() + 1 + numNoches);
 
-      // 1. Crear reserva
+      // 1. Crear reserva con adultos y niños dinámicos
       const resRes = await Reservas.crear({
         clienteId: user?.clienteId ?? user?.usuarioId ?? 1,
         alojamientoId: Number(id),
         fechaCheckIn: checkIn.toISOString().split('T')[0],
         fechaCheckOut: checkOut.toISOString().split('T')[0],
-        numAdultos: 2,
-        numNinos: 0,
+        numAdultos: numAdultos,      // ← dinámico
+        numNinos: numNinos,          // ← dinámico
         llevaMascotas: false,
         habitaciones: [{
           habitacionId: Number(habitacionId),
@@ -73,7 +122,7 @@ export default function CheckoutScreen() {
 
       const reservaId = resRes.data?.reservaId ?? resRes.data?.value?.reservaId;
 
-      // 2. Crear factura
+      // 2. Crear factura (no bloqueante)
       try {
         await Facturas.crear({
           reservaId: Number(reservaId),
@@ -86,7 +135,7 @@ export default function CheckoutScreen() {
           }]
         });
       } catch (_) {
-        // Si falla la factura, continuamos al recibo con el total calculado localmente
+        // Si falla la factura, continuamos con el total calculado localmente
       }
 
       router.replace({
@@ -95,7 +144,7 @@ export default function CheckoutScreen() {
       } as any);
 
     } catch (err) {
-      Alert.alert('Error', err.friendlyMessage || 'No se pudo procesar el pago.');
+      Alert.alert('Error', err.friendlyMessage || 'No se pudo procesar el pago. Intenta de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -133,6 +182,32 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
+        {/* ── Personas ─────────────────────────────────────────────────────── */}
+        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
+          <Text style={[styles.sectionTitle, { color: C.text }]}>Personas</Text>
+          <Counter
+            label="Adultos"
+            subtitle="Mayores de 18 años"
+            value={numAdultos}
+            onDec={() => setNumAdultos(n => Math.max(1, n - 1))}
+            onInc={() => setNumAdultos(n => Math.min(10, n + 1))}
+            min={1}
+            max={10}
+            C={C}
+          />
+          <View style={[styles.separator, { backgroundColor: C.border }]} />
+          <Counter
+            label="Niños"
+            subtitle="Menores de 18 años"
+            value={numNinos}
+            onDec={() => setNumNinos(n => Math.max(0, n - 1))}
+            onInc={() => setNumNinos(n => Math.min(10, n + 1))}
+            min={0}
+            max={10}
+            C={C}
+          />
+        </View>
+
         {/* Precios */}
         <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
           <Text style={[styles.sectionTitle, { color: C.text }]}>Desglose</Text>
@@ -142,7 +217,7 @@ export default function CheckoutScreen() {
           <PriceRow label="Total a pagar" value={`$${total.toFixed(2)}`} bold C={C} />
         </View>
 
-        {/* Tarjeta (simulada) */}
+        {/* ── Tarjeta (simulada) ────────────────────────────────────────────── */}
         <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
           <Text style={[styles.sectionTitle, { color: C.text }]}>Método de Pago</Text>
           <View style={[styles.cardSimNote, { backgroundColor: `${C.primary}15` }]}>
@@ -160,9 +235,9 @@ export default function CheckoutScreen() {
               placeholder="0000 0000 0000 0000"
               placeholderTextColor={C.textSecondary}
               keyboardType="number-pad"
-              maxLength={16}
+              maxLength={19}   // 16 dígitos + 3 espacios
               value={card}
-              onChangeText={setCard}
+              onChangeText={text => setCard(formatCardNumber(text))}
             />
           </View>
 
@@ -176,7 +251,8 @@ export default function CheckoutScreen() {
                   placeholderTextColor={C.textSecondary}
                   maxLength={5}
                   value={expiry}
-                  onChangeText={setExpiry}
+                  onChangeText={text => setExpiry(formatExpiry(text))}
+                  keyboardType="number-pad"
                 />
               </View>
             </View>
@@ -233,16 +309,27 @@ const styles = StyleSheet.create({
   infoGrid: { flexDirection: 'row', gap: 16 },
   infoItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   infoText: { fontSize: 13 },
+  // ── Contador ────────────────────────────────────────────────────────────
+  counterRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
+  counterLabel: { fontSize: 15, fontWeight: '600' },
+  counterSub: { fontSize: 12, marginTop: 2 },
+  counterControls: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  counterBtn: { width: 36, height: 36, borderRadius: 10, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
+  counterValue: { fontSize: 20, fontWeight: '800', minWidth: 28, textAlign: 'center' },
+  separator: { height: 1, marginVertical: 4 },
+  // ── Precios ──────────────────────────────────────────────────────────────
   priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 3 },
   priceLabel: { fontSize: 14, color: '#64748B' },
   priceValue: { fontSize: 14, fontWeight: '600' },
   divider: { height: 1, marginVertical: 8 },
+  // ── Tarjeta ──────────────────────────────────────────────────────────────
   cardSimNote: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 10, borderRadius: 8, marginBottom: 4 },
   simNoteText: { fontSize: 12, fontWeight: '600' },
   inputLabel: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
   inputBox: { flexDirection: 'row', alignItems: 'center', height: 48, borderWidth: 1.5, borderRadius: 10 },
   input: { flex: 1, paddingHorizontal: 10, fontSize: 15, height: '100%' },
   row: { flexDirection: 'row', gap: 12 },
+  // ── Bottom ───────────────────────────────────────────────────────────────
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, paddingBottom: 36, borderTopWidth: 1 },
   payBtn: { height: 56, borderRadius: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
   payText: { color: '#fff', fontSize: 17, fontWeight: '700' },
