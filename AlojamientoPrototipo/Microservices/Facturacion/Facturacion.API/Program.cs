@@ -20,6 +20,7 @@ builder.Services.AddApplicationServices();
 // ── Event Bus (MassTransit + RabbitMQ) ───────────────
 builder.Services.AddMassTransit(x =>
 {
+    x.SetEndpointNameFormatter(new KebabCaseEndpointNameFormatter("facturacion", false));
     x.AddConsumer<Facturacion.API.Consumers.ReservaCreadaConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>

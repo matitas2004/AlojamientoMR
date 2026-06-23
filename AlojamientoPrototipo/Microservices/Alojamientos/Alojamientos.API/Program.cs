@@ -30,6 +30,7 @@ builder.Services.AddCustomCors();
 // ── 5. MassTransit / RabbitMQ ────────────────────────
 builder.Services.AddMassTransit(x =>
 {
+    x.SetEndpointNameFormatter(new KebabCaseEndpointNameFormatter("alojamientos", false));
     x.AddConsumer<ReservaCreadaConsumer>();
     
     x.UsingRabbitMq((context, cfg) =>
