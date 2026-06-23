@@ -144,8 +144,11 @@ public class ReservasService : IReservasService
                 ReservaId = created.ReservaId,
                 ClienteId = created.ClienteId,
                 MontoTotal = created.Total,
+                FechaCheckIn = created.FechaCheckIn.ToDateTime(TimeOnly.MinValue),
+                FechaCheckOut = created.FechaCheckOut.ToDateTime(TimeOnly.MinValue),
                 Detalles = created.DetallesHabitacion.Select(d => new DetalleHabitacionEventModel
                 {
+                    HabitacionId = d.HabitacionId,
                     Descripcion = $"Habitación {d.HabitacionId} x {d.NumNoches} noches",
                     Cantidad = 1,
                     PrecioUnitario = d.SubTotalHabitacion

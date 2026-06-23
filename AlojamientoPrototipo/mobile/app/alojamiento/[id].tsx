@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Image,
   StyleSheet, ActivityIndicator, Alert,
@@ -22,31 +22,127 @@ function Amenity({ icon, label, C }) {
   );
 }
 
-// ── Selector +/− genérico ────────────────────────────────────────────────────
-function Counter({ label, value, onDec, onInc, min = 1, max = 30, C }) {
+// ── Custom Native Calendar ───────────────────────────────────────────────────
+function CustomCalendar({ blockedDates, checkIn, checkOut, onSelectDates, C }) {
+  const [currentDate, setCurrentDate] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const handlePrevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const handleNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+  const monthName = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(currentDate);
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayIndex = new Date(year, month, 1).getDay(); // 0: Sunday
+
+  const days = [];
+  for (let i = 0; i < firstDayIndex; i++) days.push(null);
+  for (let i = 1; i <= daysInMonth; i++) days.push(i);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const handleDayPress = (day) => {
+    if (!day) return;
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    // Validar fecha pasada
+    if (dateStr < todayStr) return;
+    // Validar bloqueada
+    if (blockedDates.has(dateStr)) return;
+
+    if (!checkIn || (checkIn && checkOut)) {
+      onSelectDates(dateStr, null);
+    } else {
+      // CheckOut selection
+      if (dateStr <= checkIn) {
+        onSelectDates(dateStr, null);
+      } else {
+        // Verificar si hay fechas bloqueadas en el medio
+        let d = new Date(checkIn);
+        const end = new Date(dateStr);
+        let valid = true;
+        while (d <= end) {
+          const ds = d.toISOString().split('T')[0];
+          if (blockedDates.has(ds)) {
+            valid = false; break;
+          }
+          d.setDate(d.getDate() + 1);
+        }
+        if (valid) {
+          onSelectDates(checkIn, dateStr);
+        } else {
+          Alert.alert("Fechas no disponibles", "Hay fechas ocupadas en el rango seleccionado.");
+          onSelectDates(dateStr, null);
+        }
+      }
+    }
+  };
+
   return (
-    <View style={styles.counterRow}>
-      <Text style={[styles.counterLabel, { color: C.text }]}>{label}</Text>
-      <View style={styles.counterControls}>
-        <TouchableOpacity
-          onPress={onDec}
-          disabled={value <= min}
-          style={[styles.counterBtn, { borderColor: C.border, backgroundColor: C.surface, opacity: value <= min ? 0.4 : 1 }]}
-        >
-          <Ionicons name="remove" size={18} color={C.primary} />
+    <View style={styles.calContainer}>
+      <View style={styles.calHeader}>
+        <TouchableOpacity onPress={handlePrevMonth} style={styles.calBtn}>
+          <Ionicons name="chevron-back" size={20} color={C.text} />
         </TouchableOpacity>
-        <Text style={[styles.counterValue, { color: C.text }]}>{value}</Text>
-        <TouchableOpacity
-          onPress={onInc}
-          disabled={value >= max}
-          style={[styles.counterBtn, { borderColor: C.border, backgroundColor: C.surface, opacity: value >= max ? 0.4 : 1 }]}
-        >
-          <Ionicons name="add" size={18} color={C.primary} />
+        <Text style={[styles.calMonthText, { color: C.text }]}>{monthName.charAt(0).toUpperCase() + monthName.slice(1)}</Text>
+        <TouchableOpacity onPress={handleNextMonth} style={styles.calBtn}>
+          <Ionicons name="chevron-forward" size={20} color={C.text} />
         </TouchableOpacity>
+      </View>
+      <View style={styles.calWeekRow}>
+        {['Do','Lu','Ma','Mi','Ju','Vi','Sa'].map(d => (
+          <Text key={d} style={[styles.calWeekDay, { color: C.textSecondary }]}>{d}</Text>
+        ))}
+      </View>
+      <View style={styles.calDaysGrid}>
+        {days.map((day, idx) => {
+          if (!day) return <View key={`empty-${idx}`} style={styles.calDayBox} />;
+          
+          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const isPast = dateStr < todayStr;
+          const isBlocked = blockedDates.has(dateStr);
+          const isCheckIn = dateStr === checkIn;
+          const isCheckOut = dateStr === checkOut;
+          const isInRange = checkIn && checkOut && dateStr > checkIn && dateStr < checkOut;
+          
+          let bgColor = 'transparent';
+          let textColor = C.text;
+          
+          if (isPast || isBlocked) {
+            textColor = C.border; // Gris
+            bgColor = isBlocked ? `${C.border}40` : 'transparent';
+          } else if (isCheckIn || isCheckOut) {
+            bgColor = C.primary;
+            textColor = '#fff';
+          } else if (isInRange) {
+            bgColor = `${C.primary}30`;
+          }
+
+          return (
+            <TouchableOpacity 
+              key={dateStr} 
+              style={[styles.calDayBox, { backgroundColor: bgColor }, (isCheckIn || isCheckOut) && { borderRadius: 8 }]}
+              onPress={() => handleDayPress(day)}
+              disabled={isPast || isBlocked}
+            >
+              <Text style={[styles.calDayText, { color: textColor }, (isCheckIn || isCheckOut) && { fontWeight: '700' }]}>
+                {day}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function AlojamientoScreen() {
   const { id } = useLocalSearchParams();
@@ -55,11 +151,42 @@ export default function AlojamientoScreen() {
   const C = scheme === 'dark' ? DARK : LIGHT;
   const { isAuthenticated } = useAuth();
 
-  const [alojamiento, setAlojamiento] = useState(null);
-  const [habitaciones, setHabitaciones] = useState([]);
-  const [selectedHab, setSelectedHab] = useState(null);
+  const [alojamiento, setAlojamiento] = useState<any>(null);
+  const [habitaciones, setHabitaciones] = useState<any[]>([]);
+  const [selectedHab, setSelectedHab] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [noches, setNoches] = useState(2);   // ← SELECCIONABLE por el usuario
+
+  // Fechas y Calendario
+  const [checkIn, setCheckIn] = useState<string | null>(null);
+  const [checkOut, setCheckOut] = useState<string | null>(null);
+  const [blockedDates, setBlockedDates] = useState<Set<string>>(new Set());
+
+  const fetchCalendario = async (habId: parseInt) => {
+    try {
+      const d = new Date();
+      // Traemos el mes actual y el siguiente
+      const m1 = d.getMonth() + 1;
+      const y1 = d.getFullYear();
+      
+      let m2 = m1 + 1; let y2 = y1;
+      if (m2 > 12) { m2 = 1; y2++; }
+
+      const [res1, res2] = await Promise.all([
+        Alojamientos.getDisponibilidad(habId, m1, y1),
+        Alojamientos.getDisponibilidad(habId, m2, y2)
+      ]);
+
+      const bDates = new Set<string>();
+      [...(res1.data || []), ...(res2.data || [])].forEach(c => {
+        if (c.fecha && (c.estado === 'Ocupado' || c.estado === 'Bloqueado')) {
+          bDates.add(c.fecha.split('T')[0]);
+        }
+      });
+      setBlockedDates(bDates);
+    } catch (err) {
+      console.log('Error cargando calendario', err);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -71,7 +198,10 @@ export default function AlojamientoScreen() {
       const habs = habRes.data?.value ?? habRes.data ?? [];
       setAlojamiento(aloj);
       setHabitaciones(Array.isArray(habs) ? habs : []);
-      if (habs.length > 0) setSelectedHab(habs[0]);
+      if (habs.length > 0) {
+        setSelectedHab(habs[0]);
+        fetchCalendario(habs[0].habitacionId);
+      }
     } catch (err) {
       Alert.alert('Error', 'No se pudo cargar el alojamiento.');
     } finally {
@@ -81,13 +211,24 @@ export default function AlojamientoScreen() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const handleHabitacionSelect = (h: any) => {
+    setSelectedHab(h);
+    setCheckIn(null);
+    setCheckOut(null);
+    fetchCalendario(h.habitacionId);
+  };
+
   const handleReservar = () => {
     if (!isAuthenticated) {
       router.push('/login' as any);
       return;
     }
     if (!selectedHab) {
-      Alert.alert('Selecciona una habitación', 'Por favor elige una habitación antes de continuar.');
+      Alert.alert('Habitación', 'Selecciona una habitación.');
+      return;
+    }
+    if (!checkIn || !checkOut) {
+      Alert.alert('Fechas incompletas', 'Por favor selecciona la fecha de llegada y de salida en el calendario.');
       return;
     }
     router.push({
@@ -95,44 +236,28 @@ export default function AlojamientoScreen() {
       params: {
         habitacionId: selectedHab.habitacionId,
         precioNoche: selectedHab.precioNoche ?? 0,
-        noches: noches,                            // ← dinámico
+        fechaCheckIn: checkIn,
+        fechaCheckOut: checkOut,
         alojamientoNombre: alojamiento?.nombre ?? '',
       },
     } as any);
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.center, { backgroundColor: C.bg }]}>
-        <ActivityIndicator size="large" color={C.primary} />
-      </View>
-    );
-  }
+  if (loading) return <View style={[styles.center, { backgroundColor: C.bg }]}><ActivityIndicator size="large" color={C.primary} /></View>;
+  if (!alojamiento) return <View style={[styles.center, { backgroundColor: C.bg }]}><Text style={{ color: C.text }}>Error al cargar</Text></View>;
 
-  if (!alojamiento) {
-    return (
-      <View style={[styles.center, { backgroundColor: C.bg }]}>
-        <Ionicons name="alert-circle-outline" size={52} color={C.textSecondary} />
-        <Text style={[styles.errorText, { color: C.textSecondary }]}>No se encontró el alojamiento</Text>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={[styles.link, { color: C.primary }]}>Volver</Text>
-        </TouchableOpacity>
-      </View>
-    );
+  let nights = 0;
+  if (checkIn && checkOut) {
+    nights = Math.max(1, Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 3600 * 24)));
   }
-
-  const precioTotal = (selectedHab?.precioNoche ?? 0) * noches;
+  const precioTotal = (selectedHab?.precioNoche ?? 0) * nights;
 
   return (
     <View style={[styles.container, { backgroundColor: C.bg }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Image */}
         <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: alojamiento.imagenUrl || PLACEHOLDER }}
-            style={styles.image}
-            defaultSource={{ uri: PLACEHOLDER }}
-          />
+          <Image source={{ uri: alojamiento.imagenUrl || PLACEHOLDER }} style={styles.image} defaultSource={{ uri: PLACEHOLDER }} />
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <View style={[styles.circleBtn, { backgroundColor: C.surface }]}>
               <Ionicons name="arrow-back" size={20} color={C.text} />
@@ -145,9 +270,7 @@ export default function AlojamientoScreen() {
           <Text style={[styles.name, { color: C.text }]}>{alojamiento.nombre}</Text>
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={16} color={C.textSecondary} />
-            <Text style={[styles.location, { color: C.textSecondary }]}>
-              {alojamiento.ciudad || 'Ecuador'} · {alojamiento.direccion || ''}
-            </Text>
+            <Text style={[styles.location, { color: C.textSecondary }]}>{alojamiento.ciudad || 'Ecuador'} · {alojamiento.direccion || ''}</Text>
           </View>
 
           {/* Amenities */}
@@ -177,12 +300,8 @@ export default function AlojamientoScreen() {
                   return (
                     <TouchableOpacity
                       key={h.habitacionId}
-                      style={[
-                        styles.habCard,
-                        { borderColor: selected ? C.primary : C.border, backgroundColor: C.surface },
-                        selected && { borderWidth: 2 },
-                      ]}
-                      onPress={() => setSelectedHab(h)}
+                      style={[ styles.habCard, { borderColor: selected ? C.primary : C.border, backgroundColor: C.surface }, selected && { borderWidth: 2 } ]}
+                      onPress={() => handleHabitacionSelect(h)}
                     >
                       <View style={styles.habHeader}>
                         <Text style={[styles.habName, { color: C.text }]} numberOfLines={1}>{h.nombre}</Text>
@@ -210,27 +329,30 @@ export default function AlojamientoScreen() {
             </View>
           )}
 
-          {/* ── Selector de Noches ──────────────────────────────────────── */}
-          <View style={[styles.section, styles.selectorBox, { backgroundColor: C.surface, borderColor: C.border }]}>
-            <Text style={[styles.sectionTitle, { color: C.text }]}>Configuración de la Estadía</Text>
-            <Counter
-              label="Número de noches"
-              value={noches}
-              onDec={() => setNoches(n => Math.max(1, n - 1))}
-              onInc={() => setNoches(n => Math.min(30, n + 1))}
-              min={1}
-              max={30}
-              C={C}
-            />
-            {selectedHab && (
-              <View style={[styles.totalPreview, { backgroundColor: `${C.primary}15`, borderColor: `${C.primary}30` }]}>
-                <Ionicons name="calculator-outline" size={16} color={C.primary} />
-                <Text style={[styles.totalPreviewText, { color: C.primary }]}>
-                  Estimado: ${(selectedHab.precioNoche ?? 0).toFixed(2)} × {noches} noches = <Text style={{ fontWeight: '800' }}>${precioTotal.toFixed(2)}</Text>
-                </Text>
+          {/* ── Calendario Visual ──────────────────────────────────────── */}
+          {selectedHab && (
+            <View style={[styles.section, { backgroundColor: C.surface, borderColor: C.border, borderRadius: 14, borderWidth: 1, padding: 16 }]}>
+              <Text style={[styles.sectionTitle, { color: C.text }]}>Fechas de tu Estadía</Text>
+              <CustomCalendar 
+                blockedDates={blockedDates} 
+                checkIn={checkIn} 
+                checkOut={checkOut} 
+                onSelectDates={(inDate, outDate) => { setCheckIn(inDate); setCheckOut(outDate); }}
+                C={C}
+              />
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: C.textSecondary }}>Llegada</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: C.text }}>{checkIn || '-- / -- / ----'}</Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: C.border }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: C.textSecondary }}>Salida</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: C.text }}>{checkOut || '-- / -- / ----'}</Text>
+                </View>
               </View>
-            )}
-          </View>
+            </View>
+          )}
 
           <View style={{ height: 120 }} />
         </View>
@@ -238,20 +360,23 @@ export default function AlojamientoScreen() {
 
       {/* CTA Bottom */}
       <View style={[styles.bottomBar, { backgroundColor: C.surface, borderTopColor: C.border }]}>
-        {selectedHab && (
+        {selectedHab && checkIn && checkOut ? (
           <View>
-            <Text style={[styles.priceLabel, { color: C.textSecondary }]}>Total ({noches}n)</Text>
-            <Text style={[styles.priceValue, { color: C.text }]}>
-              ${precioTotal.toFixed(2)}
-            </Text>
+            <Text style={[styles.priceLabel, { color: C.textSecondary }]}>Total ({nights}n)</Text>
+            <Text style={[styles.priceValue, { color: C.text }]}>${precioTotal.toFixed(2)}</Text>
+          </View>
+        ) : (
+          <View>
+            <Text style={[styles.priceLabel, { color: C.textSecondary }]}>Desde</Text>
+            <Text style={[styles.priceValue, { color: C.text }]}>${(selectedHab?.precioNoche ?? 0).toFixed(2)}<Text style={{fontSize:13}}>/n</Text></Text>
           </View>
         )}
         <TouchableOpacity
-          style={[styles.ctaBtn, { backgroundColor: C.primary }]}
+          style={[styles.ctaBtn, { backgroundColor: C.primary, opacity: (!checkIn || !checkOut) ? 0.6 : 1 }]}
           onPress={handleReservar}
         >
           <Text style={styles.ctaText}>
-            {isAuthenticated ? 'Reservar Ahora' : 'Iniciar Sesión para Reservar'}
+            {isAuthenticated ? 'Reservar Ahora' : 'Iniciar Sesión'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -261,9 +386,7 @@ export default function AlojamientoScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  errorText: { fontSize: 16, textAlign: 'center' },
-  link: { fontSize: 15, fontWeight: '700' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   imageContainer: { height: 300, position: 'relative' },
   image: { width: '100%', height: '100%' },
   backBtn: { position: 'absolute', top: 50, left: 16, zIndex: 10 },
@@ -287,24 +410,20 @@ const styles = StyleSheet.create({
   habDetailText: { fontSize: 12 },
   habPrice: { fontSize: 17, fontWeight: '800' },
   habPriceSub: { fontSize: 13, fontWeight: '400' },
-  // ── Selector Box ──────────────────────────────────────────────────────────
-  selectorBox: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 12 },
-  counterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  counterLabel: { fontSize: 15, fontWeight: '600' },
-  counterControls: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  counterBtn: { width: 36, height: 36, borderRadius: 10, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
-  counterValue: { fontSize: 20, fontWeight: '800', minWidth: 28, textAlign: 'center' },
-  totalPreview: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 10, borderWidth: 1, marginTop: 4 },
-  totalPreviewText: { fontSize: 13, flex: 1 },
   // ── Bottom Bar ────────────────────────────────────────────────────────────
-  bottomBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 32,
-    borderTopWidth: 1,
-  },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 14, paddingBottom: 32, borderTopWidth: 1 },
   priceLabel: { fontSize: 12 },
   priceValue: { fontSize: 18, fontWeight: '700' },
   ctaBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12 },
   ctaText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  // ── Calendario ────────────────────────────────────────────────────────────
+  calContainer: { },
+  calHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  calMonthText: { fontSize: 15, fontWeight: '700' },
+  calBtn: { padding: 4 },
+  calWeekRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 6 },
+  calWeekDay: { fontSize: 12, width: '14%', textAlign: 'center' },
+  calDaysGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calDayBox: { width: '14.28%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', padding: 2 },
+  calDayText: { fontSize: 14 },
 });

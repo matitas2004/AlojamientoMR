@@ -68,13 +68,21 @@ function formatExpiry(raw: string): string {
 
 export default function CheckoutScreen() {
   const router = useRouter();
-  const { id, habitacionId, precioNoche, noches, alojamientoNombre } = useLocalSearchParams();
+  const { id, habitacionId, precioNoche, fechaCheckIn, fechaCheckOut, alojamientoNombre } = useLocalSearchParams();
   const scheme = useColorScheme() ?? 'light';
   const C = scheme === 'dark' ? DARK : LIGHT;
   const { user } = useAuth();
 
   const pNoche = Number(precioNoche) || 0;
-  const numNoches = Number(noches) || 2;
+  
+  // Calcular noches reales desde las fechas
+  let numNoches = 1;
+  if (fechaCheckIn && fechaCheckOut) {
+    const tIn = new Date(fechaCheckIn as string).getTime();
+    const tOut = new Date(fechaCheckOut as string).getTime();
+    numNoches = Math.max(1, Math.ceil((tOut - tIn) / (1000 * 3600 * 24)));
+  }
+
   const subtotal = pNoche * numNoches;
   const impuestos = subtotal * 0.15;
   const total = subtotal + impuestos;
@@ -99,17 +107,12 @@ export default function CheckoutScreen() {
     }
     setLoading(true);
     try {
-      const checkIn = new Date();
-      checkIn.setDate(checkIn.getDate() + 1);
-      const checkOut = new Date();
-      checkOut.setDate(checkOut.getDate() + 1 + numNoches);
-
       // 1. Crear reserva con adultos y niños dinámicos
       const resRes = await Reservas.crear({
         clienteId: user?.clienteId ?? user?.usuarioId ?? 1,
         alojamientoId: Number(id),
-        fechaCheckIn: checkIn.toISOString().split('T')[0],
-        fechaCheckOut: checkOut.toISOString().split('T')[0],
+        fechaCheckIn: (fechaCheckIn as string) || new Date().toISOString().split('T')[0],
+        fechaCheckOut: (fechaCheckOut as string) || new Date(Date.now() + 86400000).toISOString().split('T')[0],
         numAdultos: numAdultos,      // ← dinámico
         numNinos: numNinos,          // ← dinámico
         llevaMascotas: false,

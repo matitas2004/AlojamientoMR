@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Alojamientos.DataAccess.Contexts;
 using Alojamientos.API.Extensions;
 using Alojamientos.API.Middleware;
+using MassTransit;
+using Alojamientos.API.Consumers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +26,33 @@ builder.Services.AddGrpc();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddCustomSwagger();
 builder.Services.AddCustomCors();
+
+// ── 5. MassTransit / RabbitMQ ────────────────────────
+builder.Services.AddMassTransit(x =>
+{
+    x.AddConsumer<ReservaCreadaConsumer>();
+    
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        var rabbitConfig = builder.Configuration.GetSection("RabbitMQ");
+        var host = rabbitConfig["Host"] ?? "localhost";
+        
+        // Usa amqps:// para Render (producción) y amqp:// para local
+        var isSecure = host.Contains("cloudamqp.com");
+        var scheme = isSecure ? "amqps" : "amqp";
+        
+        cfg.Host($"{scheme}://{host}", "/", h =>
+        {
+            h.Username(rabbitConfig["Username"] ?? "guest");
+            h.Password(rabbitConfig["Password"] ?? "guest");
+        });
+
+        cfg.ReceiveEndpoint("alojamientos-reserva-creada", e =>
+        {
+            e.ConfigureConsumer<ReservaCreadaConsumer>(context);
+        });
+    });
+});
 
 var app = builder.Build();
 

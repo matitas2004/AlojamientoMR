@@ -100,6 +100,9 @@ export const Alojamientos = {
 
   getHabitaciones: (alojamientoId) =>
     alojamientosApi.get(`/habitaciones/alojamiento/${alojamientoId}`),
+
+  getDisponibilidad: (habitacionId, mes, anio) =>
+    alojamientosApi.get(`/calendario/habitacion/${habitacionId}?mes=${mes}&anio=${anio}`),
 };
 
 export const Reservas = {
