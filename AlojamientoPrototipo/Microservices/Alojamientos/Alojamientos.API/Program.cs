@@ -34,23 +34,21 @@ builder.Services.AddMassTransit(x =>
     
     x.UsingRabbitMq((context, cfg) =>
     {
-        var rabbitConfig = builder.Configuration.GetSection("RabbitMQ");
-        var host = rabbitConfig["Host"] ?? "localhost";
-        
-        // Usa amqps:// para Render (producción) y amqp:// para local
-        var isSecure = host.Contains("cloudamqp.com");
-        var scheme = isSecure ? "amqps" : "amqp";
-        
-        cfg.Host($"{scheme}://{host}", "/", h =>
+        var rmqUrl = builder.Configuration.GetConnectionString("RabbitMQ");
+        if (!string.IsNullOrEmpty(rmqUrl))
         {
-            h.Username(rabbitConfig["Username"] ?? "guest");
-            h.Password(rabbitConfig["Password"] ?? "guest");
-        });
-
-        cfg.ReceiveEndpoint("alojamientos-reserva-creada", e =>
+            cfg.Host(new Uri(rmqUrl));
+        }
+        else
         {
-            e.ConfigureConsumer<ReservaCreadaConsumer>(context);
-        });
+            cfg.Host("localhost", "/", h =>
+            {
+                h.Username("guest");
+                h.Password("guest");
+            });
+        }
+        
+        cfg.ConfigureEndpoints(context);
     });
 });
 
